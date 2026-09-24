@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/KankaGitSync/KankaGitSync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KankaGitSync.Tests/KankaGitSync.Tests.csproj" />
+  </Folder>
+</Solution>

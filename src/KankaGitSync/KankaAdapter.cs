@@ -1,0 +1,197 @@
+using System.Text.Json.Nodes;
+
+namespace KankaGitSync;
+
+public sealed class KankaAdapter(IKankaClient client)
+{
+    public async Task<Snapshot> FetchAsync(Snapshot previous, CancellationToken cancellationToken)
+    {
+        var snapshot = new Snapshot { Users = previous.Users.Copy() };
+        foreach (var mapping in previous.Mappings) snapshot.Mappings[mapping.Key] = mapping.Value;
+        var entities = await client.ListAsync("entities", cancellationToken).ConfigureAwait(false);
+        foreach (var entity in entities) RegisterEntity(snapshot, entity);
+        foreach (var entity in entities) await FetchEntityAsync(snapshot, entity, cancellationToken).ConfigureAwait(false);
+        await ReadMembersAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        return snapshot;
+    }
+
+    private static void RegisterEntity(Snapshot snapshot, JsonObject entity)
+    {
+        var entityId = PositiveId(entity, "id");
+        var category = entity.Text("entity_type", entity.Text("entity_type_code"));
+        if (!Categories.Endpoints.ContainsKey(category))
+        {
+            snapshot.Raw["unmanaged-" + entityId] = entity.Copy();
+            return;
+        }
+        var existing = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == entityId);
+        var identifier = existing.Key ?? Canonical.NewId(entity.Text("name"), snapshot.Mappings.Keys);
+        snapshot.Mappings[identifier] = new Mapping(entityId, PositiveId(entity, "child_id"), category, "entity", null);
+    }
+
+    private async Task FetchEntityAsync(Snapshot snapshot, JsonObject entity, CancellationToken cancellationToken)
+    {
+        var pair = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == entity.Number("id"));
+        if (pair.Key == null) return;
+        var mapping = pair.Value;
+        var raw = await client.GetAsync($"{Categories.Endpoint(mapping.Category)}/{mapping.ChildId}?related=1", cancellationToken).ConfigureAwait(false);
+        if (PositiveId(raw, "entity_id") != mapping.EntityId || PositiveId(raw, "id") != mapping.ChildId)
+            throw new SyncException("API entity identity mismatch.");
+        snapshot.Raw[pair.Key] = raw.Copy();
+        snapshot.Resources[pair.Key] = Import(pair.Key, mapping, raw, snapshot.Mappings);
+        foreach (var kind in new[] { "property", "post", "relation" })
+        {
+            var children = await client.ListAsync($"entities/{mapping.EntityId}/{AttachmentEndpoint(kind)}", cancellationToken).ConfigureAwait(false);
+            foreach (var child in children) RegisterAttachment(snapshot, pair.Key, mapping, kind, child);
+        }
+    }
+
+    private static void RegisterAttachment(Snapshot snapshot, string owner, Mapping parent, string kind, JsonObject raw)
+    {
+        var childId = PositiveId(raw, "id");
+        var existing = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == kind && pair.Value.Owner == owner && pair.Value.ChildId == childId);
+        var identifier = existing.Key ?? Canonical.NewId(owner + "-" + raw.Text("name", kind), snapshot.Mappings.Keys);
+        var mapping = new Mapping(parent.EntityId, childId, parent.Category, kind, owner);
+        snapshot.Mappings[identifier] = mapping;
+        snapshot.Raw[identifier] = raw.Copy();
+        snapshot.Resources[identifier] = Import(identifier, mapping, raw, snapshot.Mappings);
+    }
+
+    private async Task ReadMembersAsync(Snapshot snapshot, CancellationToken cancellationToken)
+    {
+        foreach (var member in await client.ListAsync("users", cancellationToken).ConfigureAwait(false))
+        {
+            var identifier = PositiveId(member, "id").ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!snapshot.Users.ContainsKey(identifier))
+                snapshot.Users[identifier] = new JsonObject { ["name"] = member.Text("name"), ["role"] = "player" };
+        }
+    }
+
+    public static string AttachmentEndpoint(string kind) => kind switch
+    {
+        "property" => "attributes",
+        "post" => "posts",
+        "relation" => "relations",
+        _ => throw new SyncException("Unknown attachment kind.")
+    };
+
+    public static long PositiveId(JsonObject value, string key)
+    {
+        var identifier = value.Number(key);
+        return identifier > 0 ? identifier : throw new SyncException("API resource has no valid identity.");
+    }
+
+    public static Resource Import(string identifier, Mapping mapping, JsonObject raw, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        var metadata = new JsonObject { ["id"] = identifier, ["publish"] = true };
+        switch (mapping.Kind)
+        {
+            case "entity": ImportEntity(metadata, mapping, raw, mappings); break;
+            case "property":
+                ImportProperty(metadata, raw);
+                metadata["value"] = ContentCodec.ImportReferences(metadata.Text("value"), mappings);
+                break;
+            case "post":
+                metadata["name"] = raw.Text("name");
+                metadata["visibility"] = VisibilityName(raw);
+                break;
+            case "relation": ImportRelation(metadata, raw, mappings); break;
+            default: throw new SyncException("Unknown resource kind.");
+        }
+        var body = mapping.Kind is "entity" or "post" ? ContentCodec.Import(raw.Text("entry"), mappings) : "";
+        return new Resource(identifier, mapping.Kind, mapping.Owner, metadata, body);
+    }
+
+    private static void ImportEntity(JsonObject metadata, Mapping mapping, JsonObject raw, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        metadata["name"] = raw.Text("name");
+        metadata["category"] = mapping.Category;
+        metadata["type"] = raw.Text("type");
+        metadata["visibility"] = new JsonObject { ["private"] = raw.Flag("is_private", true) };
+        var tags = (raw["tags"] as JsonArray ?? []).Select(tag => tag is JsonObject value ? value.Number("id") : JsonFields.Integer(tag!));
+        var localTags = tags.Select(tagId => mappings.SingleOrDefault(pair => pair.Value.Category == "tag" && pair.Value.Kind == "entity" && pair.Value.ChildId == tagId).Key
+            ?? throw new SyncException("Tag is outside the imported campaign; cannot safely map it."));
+        metadata["tags"] = new JsonArray(localTags.Order(StringComparer.Ordinal).Select(tag => (JsonNode?)JsonValue.Create(tag)).ToArray());
+        var fields = new JsonObject();
+        if (mapping.Category == "character")
+            foreach (var field in new[] { "title", "age", "sex", "pronouns" }) fields[field] = raw.Text(field);
+        metadata["fields"] = fields;
+    }
+
+    private static void ImportProperty(JsonObject metadata, JsonObject raw)
+    {
+        metadata["name"] = raw.Text("name");
+        var type = raw.Number("type_id", 1);
+        if (type < 1 || type > Categories.PropertyTypes.Length) throw new SyncException("Unsupported property type; import stopped without changing Git.");
+        metadata["type"] = Categories.PropertyTypes[type - 1];
+        metadata["value"] = raw.Text("value");
+        metadata["private"] = raw.Flag("is_private", true);
+    }
+
+    private static void ImportRelation(JsonObject metadata, JsonObject raw, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        metadata["relation"] = raw.Text("relation");
+        metadata["target"] = mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == raw.Number("target_id")).Key
+            ?? throw new SyncException("Relation target is not visible or unsupported; import stopped without changing Git.");
+        metadata["attitude"] = raw.Number("attitude");
+        metadata["visibility"] = VisibilityName(raw);
+    }
+
+    private static string VisibilityName(JsonObject raw)
+    {
+        var visibility = raw.Number("visibility_id");
+        if (visibility < 1 || visibility > Categories.Visibility.Length) throw new SyncException("Unknown remote visibility.");
+        return Categories.Visibility[visibility - 1];
+    }
+
+    public static JsonObject Payload(Resource resource, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        var fields = resource.Metadata;
+        return resource.Kind switch
+        {
+            "entity" => EntityPayload(resource, mappings),
+            "post" => new JsonObject
+            {
+                ["name"] = resource.Name,
+                ["entry"] = ContentCodec.Export(resource.Body, mappings),
+                ["visibility_id"] = Array.IndexOf(Categories.Visibility, fields.Text("visibility")) + 1
+            },
+            "property" => new JsonObject
+            {
+                ["name"] = resource.Name,
+                ["value"] = ContentCodec.ExportReferences(fields.Text("value"), mappings),
+                ["type_id"] = Array.IndexOf(Categories.PropertyTypes, fields.Text("type")) + 1,
+                ["is_private"] = fields.Flag("private", true)
+            },
+            "relation" => new JsonObject
+            {
+                ["relation"] = fields.Text("relation"),
+                ["attitude"] = fields.Number("attitude"),
+                ["target_id"] = mappings[fields.Text("target")].EntityId,
+                ["visibility_id"] = Array.IndexOf(Categories.Visibility, fields.Text("visibility")) + 1
+            },
+            _ => throw new SyncException("Unknown resource kind.")
+        };
+    }
+
+    private static JsonObject EntityPayload(Resource resource, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        var metadata = resource.Metadata;
+        var result = new JsonObject
+        {
+            ["name"] = resource.Name,
+            ["type"] = metadata.Text("type"),
+            ["entry"] = ContentCodec.Export(resource.Body, mappings),
+            ["is_private"] = (metadata["visibility"] as JsonObject)?.Flag("private", true) ?? true
+        };
+        result["tags"] = new JsonArray((metadata["tags"] as JsonArray ?? []).Select(tag =>
+            (JsonNode?)JsonValue.Create(mappings[tag!.GetValue<string>()].ChildId)).ToArray());
+        if (metadata["fields"] is JsonObject fields)
+            foreach (var field in fields) result[field.Key] = field.Value?.DeepClone();
+        return result;
+    }
+
+    public static string ResourcePath(Mapping mapping) => mapping.Kind == "entity"
+        ? $"{Categories.Endpoint(mapping.Category)}/{mapping.ChildId}"
+        : $"entities/{mapping.EntityId}/{AttachmentEndpoint(mapping.Kind)}/{mapping.ChildId}";
+}

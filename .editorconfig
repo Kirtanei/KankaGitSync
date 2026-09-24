@@ -1,0 +1,15 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+[*.cs]
+dotnet_diagnostic.S3776.severity = warning
+csharp_style_namespace_declarations = file_scoped:warning
+
+[*.{json,yml,yaml,md}]
+indent_size = 2
