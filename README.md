@@ -21,6 +21,31 @@ Coverage statistics go to the console. Compiler and SonarAnalyzer warnings fail 
 
 Use `git kanka help` or `git-kanka --help`; Git intercepts `git kanka --help` as a request for an installed manual page.
 
+### Upgrade and recover a zero-resource import
+
+Version 0.1.1 fixes category detection for Kanka's current entity responses. Version 0.1.0 could preserve every entity as an unmanaged snapshot while reporting a successful import with zero editable resources.
+
+From this application's source directory, rebuild and update your installed tool:
+
+```sh
+dotnet build -c Release
+dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
+dotnet tool update --global --add-source ./artifacts/packages --version 0.1.1 KankaGitSync
+```
+
+Then return to your world repository, set `KANKA_TOKEN` in that terminal as described below, and recover through the normal fetch/merge workflow:
+
+```sh
+git kanka fetch
+git kanka pull
+git diff --cached --stat
+git kanka validate
+git commit -m "Import campaign resources with corrected category detection"
+git kanka plan
+```
+
+Keep the existing repository and configuration; `import` is only for the first import. Fetch can take a long time for large campaigns because it reads entity details and attachments under the configured API rate limit. Unsupported modules remain in `.kanka/remote` and produce a warning.
+
 ## First import
 
 Use a **separate repository for your world**, outside this application's source tree. The API token must belong to a campaign administrator who can see all managed content. Restricted visibility can otherwise look like deletion. Git stores private campaign material too; choose repository access accordingly.

@@ -4,6 +4,71 @@ namespace KankaGitSync.Tests;
 
 public sealed class AdapterTests
 {
+    [Theory]
+    [InlineData("module")]
+    [InlineData("type")]
+    [InlineData("entity_type")]
+    [InlineData("entity_type_code")]
+    public async Task CurrentAndLegacyModuleFieldsImportEditableResources(string field)
+    {
+        var client = new TestCampaign
+        {
+            CustomizeEntity = entity =>
+            {
+                var category = entity.Text("type");
+                entity.Remove("module");
+                entity.Remove("type");
+                entity[field] = field == "module" ? new JsonObject { ["code"] = category } : JsonValue.Create(category);
+            }
+        };
+        client.Records["characters/1"]["type"] = "Monarch";
+        var snapshot = await new KankaAdapter(client).FetchAsync(new Snapshot(), default);
+        Assert.Equal(6, snapshot.Resources.Count);
+        Assert.Equal("character", snapshot.Resources["maximilian"].Category);
+        Assert.Equal("Monarch", snapshot.Resources["maximilian"].Metadata.Text("type"));
+        Assert.Empty(Planner.Build(snapshot, snapshot));
+        Assert.Empty(client.Writes);
+    }
+
+    [Fact]
+    public async Task ExplicitUnknownModuleRemainsUnmanagedDespiteLegacyTypeAndPreviousMapping()
+    {
+        var client = new TestCampaign();
+        var adapter = new KankaAdapter(client);
+        var previous = await adapter.FetchAsync(new Snapshot(), default);
+        client.CustomizeEntity = entity => entity["module"] = new JsonObject { ["code"] = "custom_module" };
+        var snapshot = await adapter.FetchAsync(previous, default);
+        Assert.Empty(snapshot.Resources);
+        Assert.Equal(3, snapshot.Raw.Count);
+        Assert.All(snapshot.Raw.Keys, identifier => Assert.StartsWith("unmanaged-", identifier));
+        Assert.Contains("3 entities", Assert.Single(Validation.Warnings(snapshot)));
+    }
+
+    [Fact]
+    public async Task MissingModuleIdentityFailsInsteadOfSilentlySkippingCampaign()
+    {
+        var client = new TestCampaign
+        {
+            CustomizeEntity = entity => { entity.Remove("module"); entity.Remove("type"); }
+        };
+        var exception = await Assert.ThrowsAsync<SyncException>(() => new KankaAdapter(client).FetchAsync(new Snapshot(), default));
+        Assert.Contains("no module code", exception.Message);
+    }
+
+    [Fact]
+    public async Task FetchRecoversPreviouslyUnmanagedImport()
+    {
+        var client = new TestCampaign();
+        var previous = new Snapshot();
+        foreach (var entity in await client.ListAsync("entities", default))
+            previous.Raw["unmanaged-" + entity.Number("id")] = entity;
+        var snapshot = await new KankaAdapter(client).FetchAsync(previous, default);
+        Assert.Equal(6, snapshot.Resources.Count);
+        Assert.DoesNotContain(snapshot.Raw.Keys, identifier => identifier.StartsWith("unmanaged-", StringComparison.Ordinal));
+        Assert.Empty(Validation.Check(snapshot));
+        Assert.Empty(client.Writes);
+    }
+
     [Fact]
     public async Task RemoteRenameRetainsIdentityAndDuplicateNamesHaveDistinctIds()
     {

@@ -9,6 +9,7 @@ internal sealed class TestCampaign : IKankaClient
     public int? FailWrite { get; set; }
     public Action<string>? BeforeGet { get; set; }
     public Action<string>? AfterWrite { get; set; }
+    public Action<JsonObject>? CustomizeEntity { get; set; }
     private long nextIdentifier = 100;
 
     public TestCampaign()
@@ -85,13 +86,17 @@ internal sealed class TestCampaign : IKankaClient
         var result = Records.Where(pair => !pair.Key.StartsWith("entities/", StringComparison.Ordinal)).Select(pair =>
         {
             var category = Categories.Endpoints.Single(category => category.Value == pair.Key.Split('/')[0]).Key;
-            return new JsonObject
+            var entity = new JsonObject
             {
                 ["id"] = pair.Value.Number("entity_id"),
                 ["child_id"] = pair.Value.Number("id"),
-                ["entity_type"] = category,
+                ["module"] = new JsonObject { ["code"] = category },
+                ["type"] = category,
+                ["type_field"] = pair.Value.Text("type"),
                 ["name"] = pair.Value.Text("name")
             };
+            CustomizeEntity?.Invoke(entity);
+            return entity;
         }).ToArray();
         return Task.FromResult<IReadOnlyList<JsonObject>>(result);
     }

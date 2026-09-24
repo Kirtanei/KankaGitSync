@@ -18,7 +18,7 @@ public sealed class KankaAdapter(IKankaClient client)
     private static void RegisterEntity(Snapshot snapshot, JsonObject entity)
     {
         var entityId = PositiveId(entity, "id");
-        var category = entity.Text("entity_type", entity.Text("entity_type_code"));
+        var category = EntityCategory(entity);
         if (!Categories.Endpoints.ContainsKey(category))
         {
             snapshot.Raw["unmanaged-" + entityId] = entity.Copy();
@@ -31,6 +31,7 @@ public sealed class KankaAdapter(IKankaClient client)
 
     private async Task FetchEntityAsync(Snapshot snapshot, JsonObject entity, CancellationToken cancellationToken)
     {
+        if (snapshot.Raw.ContainsKey("unmanaged-" + entity.Number("id"))) return;
         var pair = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == entity.Number("id"));
         if (pair.Key == null) return;
         var mapping = pair.Value;
@@ -44,6 +45,15 @@ public sealed class KankaAdapter(IKankaClient client)
             var children = await client.ListAsync($"entities/{mapping.EntityId}/{AttachmentEndpoint(kind)}", cancellationToken).ConfigureAwait(false);
             foreach (var child in children) RegisterAttachment(snapshot, pair.Key, mapping, kind, child);
         }
+    }
+
+    private static string EntityCategory(JsonObject entity)
+    {
+        // Generic entities expose module identity; typed resources use type for freeform text.
+        var candidates = new[] { (entity["module"] as JsonObject)?.Text("code"), entity.Text("entity_type_code"),
+            entity.Text("entity_type"), entity.Text("type") };
+        return candidates.FirstOrDefault(category => !string.IsNullOrWhiteSpace(category))
+            ?? throw new SyncException("API entity has no module code; fetch stopped without changing Git. Check API compatibility.");
     }
 
     private static void RegisterAttachment(Snapshot snapshot, string owner, Mapping parent, string kind, JsonObject raw)

@@ -21,7 +21,15 @@ public static class Validation
         if (errors.Count != 0) throw new SyncException("Validation failed:\n" + string.Join('\n', errors));
     }
 
-    public static IEnumerable<string> Warnings(Snapshot snapshot) => snapshot.Resources.Values
+    public static IEnumerable<string> Warnings(Snapshot snapshot)
+    {
+        var unmanaged = snapshot.Raw.Keys.Count(identifier => identifier.StartsWith("unmanaged-", StringComparison.Ordinal));
+        if (unmanaged > 0)
+            yield return $"{unmanaged} entities were preserved only as unmanaged snapshots in .kanka/remote; they have no editable world resources. If expected content is missing, check API compatibility and fetch with an updated tool.";
+        foreach (var warning in ReferenceWarnings(snapshot)) yield return warning;
+    }
+
+    private static IEnumerable<string> ReferenceWarnings(Snapshot snapshot) => snapshot.Resources.Values
         .Where(resource => resource.Body.Contains("[entity:", StringComparison.Ordinal) ||
             resource.Kind == "property" && resource.Metadata.Text("value").Contains("[entity:", StringComparison.Ordinal))
         .Select(resource => resource.Id + ": preserved Kanka numeric mention; prefer a local reference where the syntax is supported.");

@@ -10,3 +10,4 @@ Preserve unknown remote fields; send only explicitly managed field patches.
 Treat remote input, YAML, Git paths, and pagination URLs as untrusted.
 Run release build, analyzer checks, and the full test suite after code changes.
 Keep coverage output in the console; any temporary artifacts belong under ignored artifacts/.
+Always commit and push completed changes after the required checks pass, unless the user explicitly instructs otherwise. Do not ask for separate confirmation; report any commit or push failure.

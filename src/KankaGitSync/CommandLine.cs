@@ -114,6 +114,7 @@ public static class CommandLine
             case "import": await ImportAsync(repository, service, output, cancellationToken).ConfigureAwait(false); break;
             case "fetch":
                 var snapshot = await service.FetchAsync(cancellationToken).ConfigureAwait(false);
+                foreach (var warning in Validation.Warnings(snapshot)) await output.WriteLineAsync("Warning: " + warning).ConfigureAwait(false);
                 await output.WriteLineAsync($"Fetched {snapshot.Resources.Count} resources onto kanka/live. main is unchanged.").ConfigureAwait(false);
                 break;
             case "plan":
@@ -153,7 +154,8 @@ public static class CommandLine
         Validation.Require(snapshot);
         if (Planner.Build(snapshot, snapshot).Count != 0) throw new SyncException("Initial zero-change plan failed.");
         await repository.RequireAsync(["merge", "--ff-only", "kanka/live"], cancellationToken: cancellationToken).ConfigureAwait(false);
-        await output.WriteLineAsync("Imported campaign. main and kanka/live are identical; zero writes planned.").ConfigureAwait(false);
+        foreach (var warning in Validation.Warnings(snapshot)) await output.WriteLineAsync("Warning: " + warning).ConfigureAwait(false);
+        await output.WriteLineAsync($"Imported campaign: {snapshot.Resources.Count} resources. main and kanka/live are identical; zero writes planned.").ConfigureAwait(false);
     }
 
     private static void EditFlag(GitRepository repository, string identifier, string flag)
