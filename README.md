@@ -36,11 +36,38 @@ git commit -m "Configure campaign synchronization"
 
 Provide `KANKA_TOKEN` through your shell environment or secrets manager. Never put its value in a command argument, config file, or Git. The tool does not load `.env` files.
 
+Create a token in Kanka's **Profile → API** settings, then use the instructions for your shell below. Paste the token at the hidden prompt and press Enter. Its value will not be displayed or saved in your shell's command history.
+
+**Git Bash (Windows), Bash (Linux/macOS):**
+
+```bash
+read -rsp 'Kanka API token: ' KANKA_TOKEN
+printf '\n'
+export KANKA_TOKEN
+```
+
+**PowerShell (Windows PowerShell 5.1 or PowerShell 7):**
+
+```powershell
+$secureToken = Read-Host 'Kanka API token' -AsSecureString
+try {
+    $env:KANKA_TOKEN = [System.Net.NetworkCredential]::new('', $secureToken).Password
+}
+finally {
+    $secureToken.Dispose()
+    Remove-Variable secureToken
+}
+```
+
+Run the following commands in that same terminal. The environment variable lasts only for the current shell session and its child processes; repeat the prompt when you open another terminal. `--campaign 123` above takes your numeric campaign ID, never the API token.
+
 ```sh
 git kanka import
 git kanka validate
 git kanka plan
 ```
+
+When finished, clear the token with `unset KANKA_TOKEN` in Bash or `Remove-Item Env:KANKA_TOKEN` in PowerShell, or close the terminal. If you accidentally paste a token into a command, chat, or Git, revoke it in Kanka and create a replacement.
 
 Import fetches the campaign onto `kanka/live`, validates it, and fast-forwards `main` to that exact state. The plan must contain zero mutations. A second import is refused; subsequent reads use `fetch`.
 
