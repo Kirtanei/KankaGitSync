@@ -1,0 +1,2 @@
+# Match .editorconfig even when a Windows checkout uses core.autocrlf=true.
+* text=auto eol=lf
