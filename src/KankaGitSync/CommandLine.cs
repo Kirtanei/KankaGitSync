@@ -47,9 +47,18 @@ public static class CommandLine
         catch (Exception exception) when (IsExpected(exception))
         {
             // Parser, filesystem and HTTP exceptions can contain content or credentials.
-            await error.WriteLineAsync(exception is SyncException ? exception.Message : $"Operation failed ({exception.GetType().Name}). Check input, access, or network connectivity. No sensitive details logged.").ConfigureAwait(false);
+            await error.WriteLineAsync(exception is SyncException ? exception.Message : $"Operation failed ({exception.GetType().Name}){FailureLocation(exception)}. Check input, access, or network connectivity. No sensitive details logged.").ConfigureAwait(false);
             return 1;
         }
+    }
+
+    private static string FailureLocation(Exception exception)
+    {
+        // Only compiled application method names are printed; exception messages and data can contain secrets.
+        var method = new System.Diagnostics.StackTrace(exception).GetFrames()
+            .Select(frame => frame.GetMethod())
+            .FirstOrDefault(method => method?.DeclaringType?.Assembly == typeof(CommandLine).Assembly);
+        return method == null ? "" : $" at {method.DeclaringType?.Name}.{method.Name}";
     }
 
     private static bool IsExpected(Exception exception) => exception is SyncException or IOException or UnauthorizedAccessException

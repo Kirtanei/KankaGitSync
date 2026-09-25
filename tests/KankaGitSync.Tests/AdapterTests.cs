@@ -5,6 +5,49 @@ namespace KankaGitSync.Tests;
 public sealed class AdapterTests
 {
     [Theory]
+    [InlineData("true", "true")]
+    [InlineData("false", "false")]
+    [InlineData("42", "42")]
+    [InlineData("null", "")]
+    public async Task ScalarPropertyValuesImportWithoutStringCastFailures(string json, string expected)
+    {
+        var client = new TestCampaign();
+        client.Records["entities/11/attributes/4"]["value"] = JsonNode.Parse(json);
+        var snapshot = await new KankaAdapter(client).FetchAsync(new Snapshot(), default);
+        Assert.Equal(expected, snapshot.Resources["maximilian-population"].Metadata.Text("value"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CheckboxValuesSurviveWorldFilesAndProduceNoWrites(bool value)
+    {
+        var client = new TestCampaign();
+        client.Records["entities/11/attributes/4"]["type_id"] = 3;
+        client.Records["entities/11/attributes/4"]["value"] = value;
+        var snapshot = await new KankaAdapter(client).FetchAsync(new Snapshot(), default);
+        var local = WorldFiles.Read(WorldFiles.Write(snapshot));
+        var payload = KankaAdapter.Payload(local.Resources["maximilian-population"], local.Mappings);
+        Assert.Equal(value, payload["value"]!.GetValue<bool>());
+        Assert.Empty(Planner.Build(local, snapshot));
+        Assert.True(Planner.Equivalent("value", payload["value"], snapshot.Raw["maximilian-population"]["value"]));
+        local.Resources["maximilian-population"].Metadata["value"] = (!value).ToString();
+        Assert.Equal("value", Assert.Single(Assert.Single(Planner.Build(local, snapshot)).Fields));
+        local.Resources["maximilian-population"].Metadata["value"] = "invalid";
+        Assert.Throws<SyncException>(() => KankaAdapter.Payload(local.Resources["maximilian-population"], local.Mappings));
+    }
+
+    [Fact]
+    public async Task StructuredPropertyValuesFailWithoutExposingContent()
+    {
+        var client = new TestCampaign();
+        client.Records["entities/11/attributes/4"]["value"] = new JsonObject { ["private-content"] = true };
+        var exception = await Assert.ThrowsAsync<SyncException>(() => new KankaAdapter(client).FetchAsync(new Snapshot(), default));
+        Assert.DoesNotContain("private-content", exception.Message);
+        Assert.Contains("scalar", exception.Message);
+    }
+
+    [Theory]
     [InlineData("module")]
     [InlineData("type")]
     [InlineData("entity_type")]

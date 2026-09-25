@@ -25,19 +25,20 @@ Use `git kanka help` or `git-kanka --help`; Git intercepts `git kanka --help` as
 
 Version 0.1.1 fixes category detection for Kanka's current entity responses. Version 0.1.0 could preserve every entity as an unmanaged snapshot while reporting a successful import with zero editable resources.
 
+Version 0.1.2 also handles boolean checkbox values in API responses and includes a code location in sanitized failure messages. Earlier versions could fail with `InvalidOperationException` when reading a checkbox as text.
+
 From this application's source directory, rebuild and update your installed tool:
 
 ```sh
 dotnet build -c Release
 dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-dotnet tool update --global --add-source ./artifacts/packages --version 0.1.1 KankaGitSync
+dotnet tool update --global --add-source ./artifacts/packages --version 0.1.2 KankaGitSync
 ```
 
 Then return to your world repository, set `KANKA_TOKEN` in that terminal as described below, and recover through the normal fetch/merge workflow:
 
 ```sh
-git kanka fetch
-git kanka pull
+git kanka fetch && git kanka pull
 git diff --cached --stat
 git kanka validate
 git commit -m "Import campaign resources with corrected category detection"
@@ -45,6 +46,8 @@ git kanka plan
 ```
 
 Keep the existing repository and configuration; `import` is only for the first import. Fetch can take a long time for large campaigns because it reads entity details and attachments under the configured API rate limit. Unsupported modules remain in `.kanka/remote` and produce a warning.
+
+Stop if any command fails. A failed fetch leaves the previous `kanka/live` snapshot in place, so subsequent validation can still report the old zero-resource import. The `&&` above prevents pulling that stale snapshot after a fetch failure in Bash or PowerShell 7.
 
 ## First import
 

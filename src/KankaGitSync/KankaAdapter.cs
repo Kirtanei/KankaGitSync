@@ -134,8 +134,28 @@ public sealed class KankaAdapter(IKankaClient client)
         var type = raw.Number("type_id", 1);
         if (type < 1 || type > Categories.PropertyTypes.Length) throw new SyncException("Unsupported property type; import stopped without changing Git.");
         metadata["type"] = Categories.PropertyTypes[type - 1];
-        metadata["value"] = raw.Text("value");
+        metadata["value"] = PropertyText(raw["value"]);
         metadata["private"] = raw.Flag("is_private", true);
+    }
+
+    private static string PropertyText(JsonNode? value) => value?.GetValueKind() switch
+    {
+        null or System.Text.Json.JsonValueKind.Null => "",
+        System.Text.Json.JsonValueKind.String => value.GetValue<string>(),
+        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False or System.Text.Json.JsonValueKind.Number => value.ToJsonString(),
+        _ => throw new SyncException("API property value must be a scalar; fetch stopped without changing Git.")
+    };
+
+    private static JsonNode PropertyValue(Resource resource, IReadOnlyDictionary<string, Mapping> mappings)
+    {
+        var value = ContentCodec.ExportReferences(resource.Metadata.Text("value"), mappings);
+        if (resource.Metadata.Text("type") != "checkbox") return JsonValue.Create(value);
+        return value.ToLowerInvariant() switch
+        {
+            "true" or "1" => JsonValue.Create(true),
+            "false" or "0" or "" => JsonValue.Create(false),
+            _ => throw new SyncException("Checkbox value must be true, false, 1, or 0.")
+        };
     }
 
     private static void ImportRelation(JsonObject metadata, JsonObject raw, IReadOnlyDictionary<string, Mapping> mappings)
@@ -169,7 +189,7 @@ public sealed class KankaAdapter(IKankaClient client)
             "property" => new JsonObject
             {
                 ["name"] = resource.Name,
-                ["value"] = ContentCodec.ExportReferences(fields.Text("value"), mappings),
+                ["value"] = PropertyValue(resource, mappings),
                 ["type_id"] = Array.IndexOf(Categories.PropertyTypes, fields.Text("type")) + 1,
                 ["is_private"] = fields.Flag("private", true)
             },

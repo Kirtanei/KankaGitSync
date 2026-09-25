@@ -2,6 +2,21 @@ namespace KankaGitSync.Tests;
 
 public sealed class CommandAndGitTests
 {
+    [Fact]
+    public async Task InvalidJsonTypesReportCodeLocationWithoutContent()
+    {
+        using var fixture = new TestRepository();
+        await fixture.InitializeAsync();
+        var resource = fixture.Working().Resources["maximilian"];
+        resource.Metadata["name"] = new System.Text.Json.Nodes.JsonObject { ["sensitive-value"] = true };
+        File.WriteAllText(fixture.Git.SafePath(WorldFiles.EntityDirectory(resource) + "/index.md"), YamlCodec.WriteMarkdown(resource));
+        using var output = new StringWriter();
+        using var errors = new StringWriter();
+        Assert.Equal(1, await CommandLine.RunAsync(["validate"], fixture.Git.Root, output, errors));
+        Assert.Contains(" at JsonFields.Text", errors.ToString());
+        Assert.DoesNotContain("sensitive-value", errors.ToString());
+    }
+
     [Theory]
     [InlineData("--help", 0)]
     [InlineData("unknown", 1)]
