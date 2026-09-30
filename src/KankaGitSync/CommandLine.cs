@@ -10,6 +10,7 @@ public static class CommandLine
     private const string Help = """
         Kanka Git Sync 0.1 — Git is permanent history; Kanka edits require review.
         git kanka init --campaign <positive-id>
+        git kanka init-env
         git kanka import | fetch | status | diff | pull | validate | plan
         git kanka push [--approve-privacy]
         git kanka publish <local-id> | delete <local-id>
@@ -22,7 +23,7 @@ public static class CommandLine
         """;
 
     public static async Task<int> RunAsync(string[] arguments, string directory, TextWriter output, TextWriter error,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Func<string?>? readToken = null)
     {
         try
         {
@@ -36,7 +37,7 @@ public static class CommandLine
             var root = await repository.RequireAsync(["rev-parse", "--show-toplevel"], cancellationToken: cancellationToken).ConfigureAwait(false);
             repository = new GitRepository(root);
             using var repositoryLock = await repository.LockAsync().ConfigureAwait(false);
-            await DispatchAsync(arguments, repository, output, cancellationToken).ConfigureAwait(false);
+            await DispatchAsync(arguments, repository, output, cancellationToken, readToken ?? TokenPrompt.Read).ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException)
@@ -72,15 +73,21 @@ public static class CommandLine
             "publish" or "delete" => arguments.Length == 2 && Canonical.ValidId(arguments[1]),
             "push" => arguments.Length == 1 || arguments.Length == 2 && arguments[1] == "--approve-privacy",
             "doctor" => arguments.Length == 1 || arguments.Length == 2 && arguments[1] == "--acknowledge-recovery",
-            "import" or "fetch" or "status" or "diff" or "pull" or "validate" or "plan" => arguments.Length == 1,
+            "init-env" or "import" or "fetch" or "status" or "diff" or "pull" or "validate" or "plan" => arguments.Length == 1,
             _ => false
         };
         if (!valid) throw new SyncException("Unknown command or arguments. Run git kanka help.");
     }
 
-    private static async Task DispatchAsync(string[] arguments, GitRepository repository, TextWriter output, CancellationToken cancellationToken)
+    private static async Task DispatchAsync(string[] arguments, GitRepository repository, TextWriter output, CancellationToken cancellationToken,
+        Func<string?> readToken)
     {
         if (arguments[0] == "init") { Initialize(repository, arguments[2]); return; }
+        if (arguments[0] == "init-env")
+        {
+            await EnvironmentFile.InitializeAsync(repository, output, readToken, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         var configuration = Configuration.Read(await File.ReadAllTextAsync(repository.SafePath(".kanka/config.yml"), cancellationToken).ConfigureAwait(false));
         if (await RunOfflineAsync(arguments, repository, output).ConfigureAwait(false)) return;
         var token = TokenConfiguration.Read(repository);

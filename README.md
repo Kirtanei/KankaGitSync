@@ -32,7 +32,7 @@ From this application's source directory, rebuild and update your installed tool
 ```sh
 dotnet build -c Release
 dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-dotnet tool update --global --add-source ./artifacts/packages --version 0.1.3 KankaGitSync
+dotnet tool update --global --add-source ./artifacts/packages --version 0.1.4 KankaGitSync
 ```
 
 Then return to your world repository, create your persistent `.env` as described below, and recover through the normal fetch/merge workflow:
@@ -62,11 +62,19 @@ git add .gitignore .kanka
 git commit -m "Configure campaign synchronization"
 ```
 
-Create `.env` in your **world repository root** and enter your Kanka API token once:
+Run this from your world repository or any of its subfolders (available in version 0.1.4):
+
+```sh
+git kanka init-env
+```
+
+Paste your Kanka API token at the hidden prompt and press Enter. The command saves it as `KANKA_API_TOKEN` in `.env` in your **world repository root** and ensures Git ignores the file. Press Escape or Ctrl+C to cancel. Blank input is rejected without creating files. You can also create the file manually:
 
 ```dotenv
 KANKA_API_TOKEN=your-token-here
 ```
+
+The command works before campaign setup, preserves existing `.env` contents, and never contacts Kanka. Review and commit any `.gitignore` change it makes. Repeating it does not duplicate ignore rules. If `.env` is already tracked by Git, the command refuses to proceed until you remove it from the index.
 
 Version 0.1.3 loads this file automatically, including when you run commands from subfolders or open a new terminal. `init` adds `.env` to `.gitignore`; keep it ignored and never commit the token. The application's `.env.example` contains a placeholder you can copy. Existing `.env` files are never overwritten.
 
