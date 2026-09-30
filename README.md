@@ -32,10 +32,10 @@ From this application's source directory, rebuild and update your installed tool
 ```sh
 dotnet build -c Release
 dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-dotnet tool update --global --add-source ./artifacts/packages --version 0.1.2 KankaGitSync
+dotnet tool update --global --add-source ./artifacts/packages --version 0.1.3 KankaGitSync
 ```
 
-Then return to your world repository, set `KANKA_TOKEN` in that terminal as described below, and recover through the normal fetch/merge workflow:
+Then return to your world repository, create your persistent `.env` as described below, and recover through the normal fetch/merge workflow:
 
 ```sh
 git kanka fetch && git kanka pull
@@ -62,40 +62,25 @@ git add .gitignore .kanka
 git commit -m "Configure campaign synchronization"
 ```
 
-Provide `KANKA_TOKEN` through your shell environment or secrets manager. Never put its value in a command argument, config file, or Git. The tool does not load `.env` files.
+Create `.env` in your **world repository root** and enter your Kanka API token once:
 
-Create a token in Kanka's **Profile → API** settings, then use the instructions for your shell below. Paste the token at the hidden prompt and press Enter. Its value will not be displayed or saved in your shell's command history.
-
-**Git Bash (Windows), Bash (Linux/macOS):**
-
-```bash
-read -rsp 'Kanka API token: ' KANKA_TOKEN
-printf '\n'
-export KANKA_TOKEN
+```dotenv
+KANKA_API_TOKEN=your-token-here
 ```
 
-**PowerShell (Windows PowerShell 5.1 or PowerShell 7):**
+Version 0.1.3 loads this file automatically, including when you run commands from subfolders or open a new terminal. `init` adds `.env` to `.gitignore`; keep it ignored and never commit the token. The application's `.env.example` contains a placeholder you can copy. Existing `.env` files are never overwritten.
 
-```powershell
-$secureToken = Read-Host 'Kanka API token' -AsSecureString
-try {
-    $env:KANKA_TOKEN = [System.Net.NetworkCredential]::new('', $secureToken).Password
-}
-finally {
-    $secureToken.Dispose()
-    Remove-Variable secureToken
-}
-```
+Both `KANKA_API_TOKEN` (as used by KankaPlugin) and `KANKA_TOKEN` are supported. Nonblank shell environment values take precedence over file values; within either source, `KANKA_TOKEN` wins. Blank values are treated as absent. Remove an old shell override if you want to use the file value.
 
-Run the following commands in that same terminal. The environment variable lasts only for the current shell session and its child processes; repeat the prompt when you open another terminal. `--campaign 123` above takes your numeric campaign ID, never the API token.
+The file accepts plain or single/double-quoted single-line values, comments beginning with `#`, whitespace, and optional `export`. Quote values containing `#`. Contents are literal: no variable expansion, escape processing, or command execution occurs. Unrelated settings are ignored; repeated token settings use the last value. Malformed token entries fail without printing their contents. Offline commands do not read credentials.
+
+Create the token in Kanka's **Profile > API** settings. Keep campaign IDs in `.kanka/config.yml`; `--campaign 123` takes your numeric campaign ID. Never put a token in command arguments, Git, or diagnostics.
 
 ```sh
 git kanka import
 git kanka validate
 git kanka plan
 ```
-
-When finished, clear the token with `unset KANKA_TOKEN` in Bash or `Remove-Item Env:KANKA_TOKEN` in PowerShell, or close the terminal. If you accidentally paste a token into a command, chat, or Git, revoke it in Kanka and create a replacement.
 
 Import fetches the campaign onto `kanka/live`, validates it, and fast-forwards `main` to that exact state. The plan must contain zero mutations. A second import is refused; subsequent reads use `fetch`.
 

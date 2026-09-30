@@ -18,7 +18,7 @@ public static class CommandLine
         Commit init configuration before import. Commit local edits before plan/push.
         plan fetches Kanka but sends no writes. pull stages a Git merge for review.
         delete records a tombstone; deletion execution is disabled in v0.1.
-        KANKA_TOKEN is read only from the environment. Use a disposable campaign first.
+        KANKA_API_TOKEN or KANKA_TOKEN is read from the environment or world-root .env. Use a disposable campaign first.
         """;
 
     public static async Task<int> RunAsync(string[] arguments, string directory, TextWriter output, TextWriter error,
@@ -83,7 +83,7 @@ public static class CommandLine
         if (arguments[0] == "init") { Initialize(repository, arguments[2]); return; }
         var configuration = Configuration.Read(await File.ReadAllTextAsync(repository.SafePath(".kanka/config.yml"), cancellationToken).ConfigureAwait(false));
         if (await RunOfflineAsync(arguments, repository, output).ConfigureAwait(false)) return;
-        var token = Environment.GetEnvironmentVariable("KANKA_TOKEN") ?? throw new SyncException("Set KANKA_TOKEN in your environment.");
+        var token = TokenConfiguration.Read(repository);
         using var client = new KankaClient(configuration.CampaignId, token, configuration.RequestsPerMinute);
         var ledger = await LedgerAsync(repository).ConfigureAwait(false);
         var service = new SyncService(repository, client, ledger);
@@ -150,7 +150,7 @@ public static class CommandLine
         File.WriteAllText(path, new Configuration(campaign, 30).Write());
         var users = repository.SafePath(".kanka/users.yml");
         if (!File.Exists(users)) File.WriteAllText(users, "{}\n");
-        File.AppendAllText(repository.SafePath(".gitignore"), "\n.env\n.env.*\n.kanka/runtime/\n");
+        File.AppendAllText(repository.SafePath(".gitignore"), "\n.env\n.env.*\n!.env.example\n.kanka/runtime/\n");
     }
 
     private static async Task ImportAsync(GitRepository repository, SyncService service, TextWriter output, CancellationToken cancellationToken)

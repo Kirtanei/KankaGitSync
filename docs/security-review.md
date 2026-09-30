@@ -4,7 +4,7 @@ The implementation's security-relevant boundaries were reviewed alongside compil
 
 | Boundary | Review and control |
 | --- | --- |
-| Bearer credentials | Environment input only; request Authorization header only; removed from Git subprocess environment. No HTTP response body or transport exception detail is printed. Responses containing the token, including JSON-escaped values or keys, are refused before persistence. |
+| Bearer credentials | Environment or ignored world-root .env input; file values remain in memory without modifying the process environment; both token variable names are stripped from Git subprocesses; request Authorization header only; removed from Git subprocess environment. No HTTP response body or transport exception detail is printed. Responses containing the token, including JSON-escaped values or keys, are refused before persistence. |
 | Pagination / SSRF | HTTPS, exact API host, port, and configured campaign path are enforced before attaching credentials. Redirects are disabled. Cycles and excessive pagination fail closed. |
 | HTTP resources | Owned clients, requests, responses, and semaphores are disposed. Requests have timeouts; response buffering is bounded. Calls are awaited. Rate limiting and bounded 429 retries honor Retry-After. Failed non-429 writes are not automatically retried. |
 | Filesystem paths | Local IDs have a restricted alphabet and length. Managed paths must remain under the selected repository and cannot traverse reparse points. Git-managed symlinks and submodules are refused. |

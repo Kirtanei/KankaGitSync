@@ -29,7 +29,7 @@ public sealed class KankaClient : IKankaClient, IDisposable
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
     {
         if (campaignId <= 0 || requestsPerMinute is < 1 or > 90) throw new SyncException("Invalid campaign or request limit.");
-        if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsControl)) throw new SyncException("Set KANKA_TOKEN to a valid bearer token.");
+        if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsControl)) throw new SyncException("Set KANKA_API_TOKEN or KANKA_TOKEN to a valid bearer token.");
         this.token = token;
         this.delayAsync = delayAsync ?? Task.Delay;
         campaignUri = new Uri($"https://api.kanka.io/1.0/campaigns/{campaignId}/");

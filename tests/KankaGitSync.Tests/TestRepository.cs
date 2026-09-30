@@ -2,7 +2,8 @@ namespace KankaGitSync.Tests;
 
 internal sealed class TestRepository : IDisposable
 {
-    private readonly string directory = Path.Combine(Path.GetTempPath(), "kanka-test-" + Guid.NewGuid().ToString("N"));
+    private readonly string directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+        "../../../../../artifacts/tests", "kanka-test-" + Guid.NewGuid().ToString("N")));
     public GitRepository Git { get; }
     public OperationLedger Ledger { get; }
     public TestCampaign Campaign { get; } = new();

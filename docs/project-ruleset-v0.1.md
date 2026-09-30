@@ -1152,7 +1152,7 @@ error reports
 generated debug bundles
 ```
 
-`.env` files, if supported, MUST be excluded through `.gitignore`.
+`.env` files MUST be excluded through `.gitignore`. The synchronizer supports an ignored `.env` in the world repository root, using `KANKA_TOKEN` or `KANKA_API_TOKEN`. Nonblank shell values override file values; within each source, `KANKA_TOKEN` takes precedence. Tokens MUST NOT be written to other configuration files or diagnostics.
 
 ---
 

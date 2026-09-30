@@ -29,10 +29,11 @@ public sealed class GitRepository(string root)
         start.ArgumentList.Add("core.quotepath=false");
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         // Credentials are for HTTP only, never inherited by Git hooks or subprocesses.
-        start.Environment.Remove("KANKA_TOKEN");
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
         if (environment != null)
             foreach (var pair in environment) start.Environment[pair.Key] = pair.Value;
+        start.Environment.Remove("KANKA_TOKEN");
+        start.Environment.Remove("KANKA_API_TOKEN");
         using var process = Process.Start(start) ?? throw new SyncException("Could not start Git.");
         var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);

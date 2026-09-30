@@ -1,5 +1,7 @@
 # Verification record
 
+Version 0.1.3 verified locally on Windows, 2026-09-30: locked restore, Release build with compiler/SonarAnalyzer (zero warnings/errors), formatting verification, and all 122 tests passed. Console-only coverage was 91.30% lines, 83.33% branches, and 96.60% methods, passing the 80% line gate. The 0.1.3 tool package was built and installed under ignored `artifacts/tools`; its help command passed a smoke test. New tests cover persistent token parsing, source/name precedence, blank and malformed credentials, root resolution from subfolders, offline independence, ignore rules, preservation of existing files, and removal of both token variables from Git subprocesses. Temporary test repositories now live under ignored `artifacts/tests`. No live Kanka API calls were made.
+
 Local verification on Windows, 2026-09-24, with .NET SDK 10.0.401:
 
 | Check | Result |
