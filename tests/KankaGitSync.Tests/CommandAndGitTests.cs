@@ -117,6 +117,20 @@ public sealed class CommandAndGitTests
     }
 
     [Fact]
+    public async Task EmptyQueueFetchDoesNotRequireKankaCredentials()
+    {
+        using var fixture = new TestRepository();
+        await fixture.InitializeAsync(false);
+        using var output = new StringWriter();
+        using var errors = new StringWriter();
+
+        Assert.Equal(0, await CommandLine.RunAsync(["fetch"], fixture.Git.Root, output, errors, createGitHub: EmptyQueue));
+
+        Assert.Contains("queue is empty", output.ToString());
+        Assert.Empty(errors.ToString());
+    }
+
+    [Fact]
     public async Task StructuredPullResolvesAdjacentIndependentYamlEdits()
     {
         using var fixture = new TestRepository();

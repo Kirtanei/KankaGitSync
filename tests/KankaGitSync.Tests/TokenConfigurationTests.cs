@@ -122,6 +122,7 @@ public sealed class TokenConfigurationTests
         };
         start.ArgumentList.Add(typeof(CommandLine).Assembly.Location);
         start.ArgumentList.Add("fetch");
+        start.ArgumentList.Add("--full");
         start.Environment.Remove("KANKA_TOKEN");
         start.Environment.Remove("KANKA_API_TOKEN");
         using var process = System.Diagnostics.Process.Start(start)!;

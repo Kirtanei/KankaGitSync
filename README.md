@@ -37,7 +37,7 @@ git kanka update
 
 Set `KANKA_GITHUB_TOKEN` once as a user or machine environment variable on every computer first. For the private `Kirtanei/KankaGitSync` repository, the token needs **Contents: Read** permission. The updater reads this environment variable only; it never reads, writes, or logs world-repository credentials. It downloads the latest stable release package, verifies its package identity and version, then installs that exact version globally. On Windows, open a new terminal after a successful update.
 
-To publish a release, update `<Version>` in `src/KankaGitSync/KankaGitSync.csproj`, commit and push it, then push the exact matching immutable tag—for example, `git tag v0.1.5` followed by `git push origin v0.1.5`. The release workflow reruns formatting, build, test, coverage, and package checks before attaching `KankaGitSync.<version>.nupkg` to the private GitHub Release. A tag that does not match the project version fails safely without publishing.
+To publish a release, update `<Version>` in `src/KankaGitSync/KankaGitSync.csproj`, commit and push it, then push the exact matching immutable tag—for example, `git tag v0.1.6` followed by `git push origin v0.1.6`. The release workflow reruns formatting, build, test, coverage, and package checks before attaching `KankaGitSync.<version>.nupkg` to the private GitHub Release. A tag that does not match the project version fails safely without publishing.
 
 Then return to your world repository, create your persistent `.env` as described below, and recover through the normal fetch/merge workflow:
 

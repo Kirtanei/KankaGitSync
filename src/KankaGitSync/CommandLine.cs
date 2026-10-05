@@ -96,13 +96,18 @@ public static class CommandLine
             await EnvironmentFile.InitializeAsync(repository, output, readToken, cancellationToken).ConfigureAwait(false);
             return;
         }
+        if (arguments[0] == "fetch" && arguments.Length == 1 || arguments[0] == "pull")
+        {
+            await RunQueuedAsync(arguments[0], repository, output, cancellationToken, createGitHub).ConfigureAwait(false);
+            return;
+        }
         var configuration = Configuration.Read(await File.ReadAllTextAsync(repository.SafePath(".kanka/config.yml"), cancellationToken).ConfigureAwait(false));
         if (await RunOfflineAsync(arguments, repository, output).ConfigureAwait(false)) return;
         var token = TokenConfiguration.Read(repository);
         using var client = new KankaClient(configuration.CampaignId, token, configuration.RequestsPerMinute);
         var ledger = await LedgerAsync(repository).ConfigureAwait(false);
         var service = new SyncService(repository, client, ledger);
-        await RunOnlineAsync(arguments, repository, service, ledger, output, cancellationToken, createGitHub).ConfigureAwait(false);
+        await RunOnlineAsync(arguments, repository, service, ledger, output, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task UpdateAsync(TextWriter output, CancellationToken cancellationToken, Func<ToolUpdater>? createUpdater,
@@ -140,26 +145,15 @@ public static class CommandLine
     }
 
     private static async Task RunOnlineAsync(string[] arguments, GitRepository repository, SyncService service,
-        OperationLedger ledger, TextWriter output, CancellationToken cancellationToken, Func<GitRepository, GitHubIssuesClient> createGitHub)
+        OperationLedger ledger, TextWriter output, CancellationToken cancellationToken)
     {
         switch (arguments[0])
         {
             case "import": await ImportAsync(repository, service, output, cancellationToken).ConfigureAwait(false); break;
             case "fetch":
-                var snapshot = arguments.Length == 2 ? await service.FetchAsync(output, cancellationToken).ConfigureAwait(false) :
-                    await FetchQueuedAsync(repository, service, cancellationToken, createGitHub).ConfigureAwait(false);
+                var snapshot = await service.FetchAsync(output, cancellationToken).ConfigureAwait(false);
                 foreach (var warning in Validation.Warnings(snapshot)) await output.WriteLineAsync("Warning: " + warning).ConfigureAwait(false);
                 await output.WriteLineAsync($"Fetched {snapshot.Resources.Count} resources onto kanka/live. main is unchanged.").ConfigureAwait(false);
-                break;
-            case "pull":
-                var issues = await QueueAsync(repository, cancellationToken, createGitHub).ConfigureAwait(false);
-                if (issues.Count != 0) await service.FetchQueuedAsync(issues, cancellationToken).ConfigureAwait(false);
-                await PullAsync(repository, output, issues.Select(issue => issue.IssueNumber)).ConfigureAwait(false);
-                if (issues.Count != 0)
-                {
-                    using var github = createGitHub(repository);
-                    await github.CloseAsync(issues.Select(issue => issue.IssueNumber), cancellationToken).ConfigureAwait(false);
-                }
                 break;
             case "plan":
                 await repository.EnsureCleanMainAsync().ConfigureAwait(false);
@@ -228,12 +222,29 @@ public static class CommandLine
         return new GitHubIssuesClient(origin.Owner, origin.Repository, TokenConfiguration.ReadGitHub(repository));
     }
 
-    private static async Task<Snapshot> FetchQueuedAsync(GitRepository repository, SyncService service, CancellationToken cancellationToken,
+    private static async Task RunQueuedAsync(string command, GitRepository repository, TextWriter output, CancellationToken cancellationToken,
         Func<GitRepository, GitHubIssuesClient> createGitHub)
     {
         var issues = await QueueAsync(repository, cancellationToken, createGitHub).ConfigureAwait(false);
-        if (issues.Count == 0) throw new SyncException("GitHub webhook queue is empty; use git kanka fetch --full for a complete campaign scan.");
-        return await service.FetchQueuedAsync(issues, cancellationToken).ConfigureAwait(false);
+        if (issues.Count == 0)
+        {
+            if (command == "pull") await PullAsync(repository, output, []).ConfigureAwait(false);
+            else await output.WriteLineAsync("GitHub webhook queue is empty; kanka/live is unchanged. Use git kanka fetch --full for a complete campaign scan.").ConfigureAwait(false);
+            return;
+        }
+        var configuration = Configuration.Read(await File.ReadAllTextAsync(repository.SafePath(".kanka/config.yml"), cancellationToken).ConfigureAwait(false));
+        using var client = new KankaClient(configuration.CampaignId, TokenConfiguration.Read(repository), configuration.RequestsPerMinute);
+        var service = new SyncService(repository, client, await LedgerAsync(repository).ConfigureAwait(false));
+        var snapshot = await service.FetchQueuedAsync(issues, cancellationToken).ConfigureAwait(false);
+        if (command == "fetch")
+        {
+            foreach (var warning in Validation.Warnings(snapshot)) await output.WriteLineAsync("Warning: " + warning).ConfigureAwait(false);
+            await output.WriteLineAsync($"Fetched {snapshot.Resources.Count} resources onto kanka/live. main is unchanged.").ConfigureAwait(false);
+            return;
+        }
+        await PullAsync(repository, output, issues.Select(issue => issue.IssueNumber)).ConfigureAwait(false);
+        using var github = createGitHub(repository);
+        await github.CloseAsync(issues.Select(issue => issue.IssueNumber), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task PullAsync(GitRepository repository, TextWriter output, IEnumerable<long> issueNumbers)

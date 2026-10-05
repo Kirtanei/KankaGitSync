@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>git-kanka</ToolCommandName>
     <PackageId>KankaGitSync</PackageId>
-    <Version>0.1.5</Version>
+    <Version>0.1.6</Version>
     <Description>Reviewable Git and Kanka campaign synchronization.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
