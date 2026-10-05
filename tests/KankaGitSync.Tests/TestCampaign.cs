@@ -6,6 +6,7 @@ internal sealed class TestCampaign : IKankaClient
 {
     public Dictionary<string, JsonObject> Records { get; } = new(StringComparer.Ordinal);
     public List<(string Path, JsonObject Body, bool Create)> Writes { get; } = [];
+    public List<string> Deletes { get; } = [];
     public int? FailWrite { get; set; }
     public Action<string>? BeforeGet { get; set; }
     public Action<string>? AfterWrite { get; set; }
@@ -131,5 +132,13 @@ internal sealed class TestCampaign : IKankaClient
         var result = Records[path].Copy();
         AfterWrite?.Invoke(path);
         return Task.FromResult(result);
+    }
+
+    public Task DeleteAsync(string path, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Records.Remove(path)) throw new SyncException("Fake resource missing.");
+        Deletes.Add(path);
+        return Task.CompletedTask;
     }
 }

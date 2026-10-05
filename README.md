@@ -23,13 +23,13 @@ Coverage statistics go to the console. Compiler and SonarAnalyzer warnings fail 
 
 Use `git kanka help` or `git-kanka --help`; Git intercepts `git kanka --help` as a request for an installed manual page.
 
-Update an installed tool from the latest stable private GitHub Release:
+Update an installed tool from the latest stable public GitHub Release:
 
 ```sh
 git kanka update
 ```
 
-Set machine-level `KANKA_GITHUB_TOKEN` with **Contents: Read** access to use `update`. Then use this normal workflow from a world repository:
+No GitHub token is required to use `update`. Then use this normal workflow from a world repository:
 
 ```sh
 git kanka fetch
@@ -37,5 +37,11 @@ git kanka status
 git kanka diff
 git kanka pull
 ```
+
+To delete managed Kanka content, create and commit a tombstone with `git kanka delete <local-id>`, inspect `git kanka plan`, and use `git kanka push --allow-delete`. Removing a local file never deletes Kanka content. Coordinate an editing pause while publishing: Kanka does not document a conditional-write API, so a final read/write race remains possible.
+
+## Support and security
+
+Kanka Git Sync is MIT licensed and maintained on a best-effort basis. It supports .NET 10 and Git on Windows and Linux. Report suspected vulnerabilities privately through GitHub Security Advisories; do not include tokens or campaign content in public issues. The current supported surface is documented in the architecture record; do not treat untested Kanka resource types as editable.
 
 The Wiki is the complete manual. Repository-controlled technical records remain available: [architecture and limitations](docs/architecture.md), [security review](docs/security-review.md), [verification](docs/verification.md), [project ruleset](docs/project-ruleset-v0.1.md), and [live acceptance checks](docs/acceptance.md).

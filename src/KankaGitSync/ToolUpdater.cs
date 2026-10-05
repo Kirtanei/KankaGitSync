@@ -42,10 +42,17 @@ public sealed class ToolUpdater : IDisposable
         return VersionNumber.Parse(version.Split('+', 2)[0]).ToString();
     }
 
-    public async Task<ToolUpdateResult> UpdateAsync(string token, CancellationToken cancellationToken)
+    public Task<ToolUpdateResult> UpdateAsync(CancellationToken cancellationToken) => UpdateAsyncCore(null, cancellationToken);
+
+    public Task<ToolUpdateResult> UpdateAsync(string token, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsControl))
             throw new SyncException("Set KANKA_GITHUB_TOKEN as a machine environment variable with Contents: Read access to Kirtanei/KankaGitSync.");
+        return UpdateAsyncCore(token, cancellationToken);
+    }
+
+    private async Task<ToolUpdateResult> UpdateAsyncCore(string? token, CancellationToken cancellationToken)
+    {
         var release = await LatestReleaseAsync(token, cancellationToken).ConfigureAwait(false);
         if (release.Version.CompareTo(VersionNumber.Parse(currentVersion)) <= 0)
             return new ToolUpdateResult(false, release.Version.ToString());
@@ -67,7 +74,7 @@ public sealed class ToolUpdater : IDisposable
         }
     }
 
-    private async Task<Release> LatestReleaseAsync(string token, CancellationToken cancellationToken)
+    private async Task<Release> LatestReleaseAsync(string? token, CancellationToken cancellationToken)
     {
         using var request = Request(HttpMethod.Get, $"repos/{Owner}/{Repository}/releases/latest", token);
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -88,7 +95,7 @@ public sealed class ToolUpdater : IDisposable
         return new Release(version, packageName, assetUri);
     }
 
-    private async Task DownloadPackageAsync(Uri assetUri, string token, string packagePath, CancellationToken cancellationToken)
+    private async Task DownloadPackageAsync(Uri assetUri, string? token, string packagePath, CancellationToken cancellationToken)
     {
         using var request = Request(HttpMethod.Get, assetUri, token);
         request.Headers.Accept.Clear();
@@ -184,12 +191,12 @@ public sealed class ToolUpdater : IDisposable
         }
     }
 
-    private static HttpRequestMessage Request(HttpMethod method, string path, string token) => Request(method, new Uri(ApiAddress, path), token);
+    private static HttpRequestMessage Request(HttpMethod method, string path, string? token) => Request(method, new Uri(ApiAddress, path), token);
 
-    private static HttpRequestMessage Request(HttpMethod method, Uri address, string token)
+    private static HttpRequestMessage Request(HttpMethod method, Uri address, string? token)
     {
         var request = new HttpRequestMessage(method, address);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (!string.IsNullOrWhiteSpace(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
         request.Headers.UserAgent.ParseAdd("kanka-git-sync");

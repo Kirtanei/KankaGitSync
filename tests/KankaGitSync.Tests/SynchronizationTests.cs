@@ -63,7 +63,7 @@ public sealed class SynchronizationTests
     }
 
     [Fact]
-    public async Task MissingFilesNeverDeleteRemoteObjectsAndTombstonesBlockExecution()
+    public async Task MissingFilesNeverDeleteRemoteObjectsAndTombstonesRequireExplicitAcknowledgement()
     {
         using var fixture = new TestRepository();
         await fixture.InitializeAsync();
@@ -71,15 +71,15 @@ public sealed class SynchronizationTests
         var remote = fixture.Working();
         local.Resources.Remove("maximilian-journal");
         Assert.Empty(Planner.Build(local, remote));
-        local.Resources["tarant"].Metadata["deleted"] = true;
-        // Remove inbound references so validation is not the reason deletion is blocked.
-        local.Resources.Remove("maximilian-relation");
-        local.Resources["maximilian"] = local.Resources["maximilian"] with { Body = "History." };
-        Assert.Contains(Planner.Build(local, remote), operation => operation.Action == "delete-blocked");
+        local = fixture.Working();
+        local.Resources["maximilian-journal"].Metadata["deleted"] = true;
+        Assert.Contains(Planner.Build(local, remote), operation => operation.Action == "delete");
         fixture.Save(local);
         await fixture.CommitAsync();
-        await Assert.ThrowsAsync<SyncException>(() => fixture.Service.PushAsync(true, TextWriter.Null));
+        await Assert.ThrowsAsync<SyncException>(() => fixture.Service.PushAsync(true, false, TextWriter.Null));
         Assert.Empty(fixture.Campaign.Writes);
+        await fixture.Service.PushAsync(true, true, TextWriter.Null);
+        Assert.Equal(["entities/11/posts/5"], fixture.Campaign.Deletes);
     }
 
     [Fact]

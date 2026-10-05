@@ -32,7 +32,7 @@ public static class Planner
     {
         if (resource.Deleted)
         {
-            if (remote.Resources.ContainsKey(resource.Id)) operations.Add(new Operation(resource, "delete-blocked", [], true));
+            if (remote.Resources.ContainsKey(resource.Id)) operations.Add(new Operation(resource, "delete", [], false));
             return;
         }
         if (!remote.Resources.TryGetValue(resource.Id, out var previous))
@@ -59,12 +59,12 @@ public static class Planner
     {
         "create" when operation.Resource.Kind == "entity" => 0,
         "complete" => 1,
-        "delete-blocked" => 9,
+        "delete" => operation.Resource.Kind switch { "relation" => 0, "post" => 1, "property" => 2, "entity" => 3, _ => 4 },
         _ => operation.Resource.Kind switch { "entity" => 2, "property" => 3, "post" => 4, "relation" => 5, _ => 6 }
     };
 
     public static string Describe(IReadOnlyList<Operation> operations) =>
-        "PUSH PLAN (deletions are disabled in v0.1)\n" + string.Join('\n', operations.Select(operation =>
+        "PUSH PLAN\n" + string.Join('\n', operations.Select(operation =>
             $"{operation.Action.ToUpperInvariant()} {operation.Resource.Id} [{string.Join(", ", operation.Fields)}]" +
             (operation.PrivacyChange ? " PRIVACY/PUBLICATION REVIEW" : ""))) +
         $"\n{operations.Count} API operations planned.";

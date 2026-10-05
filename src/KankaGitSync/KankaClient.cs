@@ -11,6 +11,7 @@ public interface IKankaClient
     Task<JsonObject> GetAsync(string path, CancellationToken cancellationToken);
     Task<IReadOnlyList<JsonObject>> ListAsync(string path, CancellationToken cancellationToken);
     Task<JsonObject> WriteAsync(string path, JsonObject body, bool create, CancellationToken cancellationToken);
+    Task DeleteAsync(string path, CancellationToken cancellationToken);
 }
 
 public sealed class KankaClient : IKankaClient, IDisposable
@@ -68,6 +69,17 @@ public sealed class KankaClient : IKankaClient, IDisposable
             return await CreateRelationAsync(path, body, cancellationToken).ConfigureAwait(false);
         var response = await RequestAsync(create ? HttpMethod.Post : HttpMethod.Patch, path, body, cancellationToken).ConfigureAwait(false);
         return response["data"] as JsonObject ?? throw new SyncException("API write returned no object; refetch before retrying.");
+    }
+
+    public async Task DeleteAsync(string path, CancellationToken cancellationToken)
+    {
+        var address = SafeUri(path);
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await SendDeleteWithBackoffAsync(address, cancellationToken).ConfigureAwait(false);
+        }
+        finally { gate.Release(); }
     }
 
     private async Task<JsonObject> CreateRelationAsync(string path, JsonObject body, CancellationToken cancellationToken)
@@ -129,6 +141,28 @@ public sealed class KankaClient : IKankaClient, IDisposable
                 ?? throw new SyncException("Invalid API JSON response.");
             if (ContainsCredential(parsed)) throw new SyncException("Decoded API data unexpectedly contained credentials; refused to persist it.");
             return parsed;
+        }
+        throw new SyncException("Kanka rate limit persisted; try again later.");
+    }
+
+    private async Task SendDeleteWithBackoffAsync(Uri address, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < MaximumAttempts; attempt++)
+        {
+            var delay = nextRequest - DateTimeOffset.UtcNow;
+            if (delay > TimeSpan.Zero) await delayAsync(delay, cancellationToken).ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Delete, address);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            nextRequest = DateTimeOffset.UtcNow + interval;
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                nextRequest = DateTimeOffset.UtcNow + RetryDelay(response, attempt);
+                continue;
+            }
+            if (!response.IsSuccessStatusCode) throw new SyncException($"Kanka request failed (HTTP {(int)response.StatusCode}). No response body logged.");
+            return;
         }
         throw new SyncException("Kanka rate limit persisted; try again later.");
     }

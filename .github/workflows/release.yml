@@ -26,7 +26,10 @@ jobs:
           package_version="$(dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | tail -n 1)"
           test "v${package_version}" = "${GITHUB_REF_NAME}"
       - run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
+      - name: Create package checksum
+        shell: bash
+        run: sha256sum artifacts/packages/KankaGitSync.*.nupkg > artifacts/packages/KankaGitSync.sha256
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" artifacts/packages/KankaGitSync.*.nupkg --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" artifacts/packages/KankaGitSync.*.nupkg artifacts/packages/KankaGitSync.sha256 --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes

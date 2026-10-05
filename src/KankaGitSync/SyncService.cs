@@ -73,7 +73,10 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         return Planner.Build(local, remote);
     }
 
-    public async Task PushAsync(bool approvePrivacy, TextWriter output, CancellationToken cancellationToken = default)
+    public Task PushAsync(bool approvePrivacy, TextWriter output, CancellationToken cancellationToken = default) =>
+        PushAsync(approvePrivacy, false, output, cancellationToken);
+
+    public async Task PushAsync(bool approvePrivacy, bool allowDelete, TextWriter output, CancellationToken cancellationToken = default)
     {
         await repository.EnsureCleanMainAsync().ConfigureAwait(false);
         var main = await repository.ResolveAsync(GitRepository.Main).ConfigureAwait(false) ?? throw new SyncException("Import a campaign first.");
@@ -83,7 +86,8 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         var local = WorldFiles.Read(await repository.ReadTreeAsync(main).ConfigureAwait(false));
         var operations = Planner.Build(local, remote);
         await output.WriteLineAsync(Planner.Describe(operations)).ConfigureAwait(false);
-        if (operations.Any(operation => operation.Action == "delete-blocked")) throw new SyncException("Deletion execution is disabled in v0.1. Tombstones are reviewable only.");
+        if (!allowDelete && operations.Any(operation => operation.Action == "delete"))
+            throw new SyncException("Review deletion tombstones, then use --allow-delete to apply this plan.");
         if (!approvePrivacy && operations.Any(operation => operation.PrivacyChange))
             throw new SyncException("Review publication/privacy changes, then use --approve-privacy to apply this plan.");
         if (operations.Count == 0) return;
@@ -129,6 +133,11 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
     {
         foreach (var resource in operations.Select(operation => operation.Resource).DistinctBy(resource => resource.Id))
         {
+            if (operations.Any(operation => operation.Resource.Id == resource.Id && operation.Action == "delete"))
+            {
+                if (actual.Resources.ContainsKey(resource.Id)) throw new SyncException("Post-push verification failed: deleted resource remains in Kanka.");
+                continue;
+            }
             if (!actual.Resources.TryGetValue(resource.Id, out var imported)) throw new SyncException("Post-push verification failed: resource missing.");
             var expected = KankaAdapter.Payload(resource, actual.Mappings);
             var observed = KankaAdapter.Payload(imported, actual.Mappings);

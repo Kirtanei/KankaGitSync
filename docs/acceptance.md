@@ -9,7 +9,7 @@ Run these checks with a disposable campaign and a separate world repository befo
 5. Make a local prose edit and commit it. Plan must contain only that resource's managed fields. Push, fetch, and plan again; require zero writes. Verify unmanaged metadata and permissions remain intact.
 6. Repeat with tags, a property, a post, and a relation. Inspect private visibility and post permissions directly in Kanka after each update.
 7. Create two published local entities referencing each other. Inspect the plan, acknowledge publication, and push. Confirm stable local/numeric mappings, working references, and zero writes on a second push.
-8. Remove a local file. Confirm no deletion operation. Add an explicit tombstone; confirm it is visible in the plan and execution is blocked in v0.1.
+8. Remove a local file. Confirm no deletion operation. Add and commit an explicit tombstone; confirm it is visible in the plan, blocked without `--allow-delete`, and deleted only when that acknowledgement is supplied. Fetch and confirm the resource is absent while its ID mapping remains available for recovery review.
 9. Make non-overlapping local/remote structured edits and pull; inspect the staged merge. Make competing prose edits and confirm an unresolved Git conflict. Change privacy on both sides and require review even if both changes agree.
 10. Interrupt a push after a successful mutation. Confirm refetch or an actionable recovery failure, preserved successful operation IDs, and no blind replay. Test a create with a lost response, reconcile the actual existing object manually, and only then acknowledge recovery.
 11. Inspect Git files and logs for token leakage without printing the token. Confirm every new local file outside world/ remains unpublished.

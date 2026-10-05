@@ -12,20 +12,20 @@ public static class CommandLine
         git kanka init --campaign <positive-id>
         git kanka init-env
         git kanka import | fetch [--full] | status | diff | pull | validate | plan | update
-        git kanka push [--approve-privacy]
+        git kanka push [--approve-privacy] [--allow-delete]
         git kanka publish <local-id> | delete <local-id>
         git kanka doctor [--acknowledge-recovery]
 
         Commit init configuration before import. Commit local edits before plan/push.
         fetch reads the GitHub webhook queue; fetch --full scans Kanka. pull merges clean queued changes and closes their queue issues.
-        delete records a tombstone; deletion execution is disabled in v0.1.
+        delete records a tombstone. Commit it, review the plan, then use --allow-delete to execute it.
         KANKA_API_TOKEN or KANKA_TOKEN is read from the environment or world-root .env. Use a disposable campaign first.
-        update checks the latest private GitHub Release and requires machine-level KANKA_GITHUB_TOKEN.
+        update checks the latest public GitHub Release.
         """;
 
     public static async Task<int> RunAsync(string[] arguments, string directory, TextWriter output, TextWriter error,
         CancellationToken cancellationToken = default, Func<string?>? readToken = null, Func<ToolUpdater>? createUpdater = null,
-        Func<string, string?>? readEnvironment = null, Func<GitRepository, GitHubIssuesClient>? createGitHub = null)
+        Func<GitRepository, GitHubIssuesClient>? createGitHub = null)
     {
         try
         {
@@ -37,7 +37,7 @@ public static class CommandLine
             ValidateArguments(arguments);
             if (arguments[0] == "update")
             {
-                await UpdateAsync(output, cancellationToken, createUpdater, readEnvironment).ConfigureAwait(false);
+                await UpdateAsync(output, cancellationToken, createUpdater).ConfigureAwait(false);
                 return 0;
             }
             var repository = new GitRepository(directory);
@@ -78,7 +78,8 @@ public static class CommandLine
         {
             "init" => arguments.Length == 3 && arguments[1] == "--campaign",
             "publish" or "delete" => arguments.Length == 2 && Canonical.ValidId(arguments[1]),
-            "push" => arguments.Length == 1 || arguments.Length == 2 && arguments[1] == "--approve-privacy",
+            "push" => arguments.Skip(1).Distinct(StringComparer.Ordinal).Count() == arguments.Length - 1 &&
+                arguments.Skip(1).All(argument => argument is "--approve-privacy" or "--allow-delete"),
             "doctor" => arguments.Length == 1 || arguments.Length == 2 && arguments[1] == "--acknowledge-recovery",
             "fetch" => arguments.Length == 1 || arguments.Length == 2 && arguments[1] == "--full",
             "init-env" or "import" or "status" or "diff" or "pull" or "validate" or "plan" or "update" => arguments.Length == 1,
@@ -110,11 +111,10 @@ public static class CommandLine
         await RunOnlineAsync(arguments, repository, service, ledger, output, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task UpdateAsync(TextWriter output, CancellationToken cancellationToken, Func<ToolUpdater>? createUpdater,
-        Func<string, string?>? readEnvironment)
+    private static async Task UpdateAsync(TextWriter output, CancellationToken cancellationToken, Func<ToolUpdater>? createUpdater)
     {
         using var updater = createUpdater?.Invoke() ?? new ToolUpdater(ToolUpdater.CurrentVersion());
-        var result = await updater.UpdateAsync(TokenConfiguration.ReadGitHubEnvironment(readEnvironment), cancellationToken).ConfigureAwait(false);
+        var result = await updater.UpdateAsync(cancellationToken).ConfigureAwait(false);
         await output.WriteLineAsync(result.Updated
             ? $"Updated Git Kanka to {result.Version}. Open a new terminal before running it again."
             : $"Git Kanka is already up to date ({result.Version}).").ConfigureAwait(false);
@@ -159,7 +159,10 @@ public static class CommandLine
                 await repository.EnsureCleanMainAsync().ConfigureAwait(false);
                 await output.WriteLineAsync(Planner.Describe(await service.PlanAsync(true, output, cancellationToken).ConfigureAwait(false))).ConfigureAwait(false);
                 break;
-            case "push": await service.PushAsync(arguments.Length == 2, output, cancellationToken).ConfigureAwait(false); break;
+            case "push":
+                await service.PushAsync(arguments.Contains("--approve-privacy", StringComparer.Ordinal),
+                    arguments.Contains("--allow-delete", StringComparer.Ordinal), output, cancellationToken).ConfigureAwait(false);
+                break;
             case "doctor":
                 await service.FetchAsync(output, cancellationToken).ConfigureAwait(false);
                 ledger.AcknowledgeRecovery();

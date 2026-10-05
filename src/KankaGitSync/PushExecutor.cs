@@ -13,6 +13,11 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
     private async Task ApplyOneAsync(Operation operation, Snapshot remote, CancellationToken cancellationToken)
     {
         var resource = operation.Resource;
+        if (operation.Action == "delete")
+        {
+            await DeleteAsync(operation, remote, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         var create = operation.Action == "create";
         var before = create ? null : await GuardAsync(resource.Id, remote, cancellationToken).ConfigureAwait(false);
         var payload = BuildPayload(operation, remote.Mappings);
@@ -21,6 +26,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
         {
             ["phase"] = "intent",
             ["operation_id"] = identifier,
+            ["action"] = operation.Action,
             ["resource"] = resource.Id,
             ["before_hash"] = Canonical.Hash(before),
             ["planned_hash"] = Canonical.Hash(payload)
@@ -33,6 +39,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
         {
             ["phase"] = "applied",
             ["operation_id"] = identifier,
+            ["action"] = operation.Action,
             ["resource"] = resource.Id,
             ["after_hash"] = Canonical.Hash(response),
             ["response_id"] = response.Number("id"),
@@ -46,6 +53,34 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
             }
         });
         remote.Raw[resource.Id] = response.Copy();
+    }
+
+    private async Task DeleteAsync(Operation operation, Snapshot remote, CancellationToken cancellationToken)
+    {
+        var resource = operation.Resource;
+        var before = await GuardAsync(resource.Id, remote, cancellationToken).ConfigureAwait(false);
+        var identifier = Guid.NewGuid().ToString("N");
+        var path = KankaAdapter.ResourcePath(remote.Mappings[resource.Id]);
+        ledger.Append(new JsonObject
+        {
+            ["phase"] = "intent",
+            ["operation_id"] = identifier,
+            ["action"] = "delete",
+            ["resource"] = resource.Id,
+            ["before_hash"] = Canonical.Hash(before),
+            ["planned_hash"] = Canonical.Hash(null)
+        });
+        await client.DeleteAsync(path, cancellationToken).ConfigureAwait(false);
+        ledger.Append(new JsonObject
+        {
+            ["phase"] = "applied",
+            ["operation_id"] = identifier,
+            ["action"] = "delete",
+            ["resource"] = resource.Id,
+            ["before_hash"] = Canonical.Hash(before)
+        });
+        remote.Resources.Remove(resource.Id);
+        remote.Raw.Remove(resource.Id);
     }
 
     private async Task<JsonObject> GuardAsync(string identifier, Snapshot remote, CancellationToken cancellationToken)

@@ -2,7 +2,7 @@
 
 `CommandLine` dispatches the Git-style CLI. `SyncService` orchestrates fetch, integration checks, planning, application, recovery, and verification. `GitRepository` uses Git plumbing with a temporary index, technical commit identity, and compare-and-swap ref updates. `WorldFiles`, `YamlCodec`, and `ContentCodec` define portable files. `KankaAdapter` owns numeric IDs and endpoint translations. `Planner` produces explicit operations. `PushExecutor` and `OperationLedger` handle non-atomic writes. `SemanticMerge` resolves independent structured fields while leaving hard conflicts reviewable.
 
-There are no API DELETE calls and no writes to permissions endpoints. Missing local resources are ignored by the mutation planner. Missing remote resources disappear from `kanka/live` while ID mappings are retained to prevent accidental recreation.
+There are no writes to permissions endpoints. Missing local resources are ignored by the mutation planner. A committed tombstone created with `git kanka delete <local-id>` plans a remote DELETE and requires the per-run `--allow-delete` acknowledgement. Missing remote resources disappear from `kanka/live` while ID mappings are retained to prevent accidental recreation.
 
 ## Branch and echo bookkeeping
 
@@ -16,7 +16,7 @@ Kanka's relation creation endpoint returns a collection that can include older r
 
 ## Support declaration
 
-The ruleset reserves **FULL** for the entire CRUD lifecycle with proven round trips. No resource is claimed FULL in this non-destructive release: deletion and live-campaign round-trip certification remain deferred. The core adapters provide import/diff/create/update for entity common fields, tags, properties, posts, and relations under the explicit v0.1 mutation policy. Treat this as a documented interim extension to the three-level support model, not a claim of full protocol coverage.
+The ruleset reserves **FULL** for the entire CRUD lifecycle with proven round trips. The core adapters have tested local fixtures for entity common fields, tags, properties, posts, and relations, including explicitly acknowledged deletion. Live-campaign round-trip certification remains required before any resource is claimed FULL for production use. Treat the current support table as a documented interim extension to the three-level support model, not a claim of full protocol coverage.
 
 | Resource surface | v0.1 behavior |
 | --- | --- |
@@ -25,7 +25,8 @@ The ruleset reserves **FULL** for the entire CRUD lifecycle with proven round tr
 | Properties, posts, relations | Independent import, diff, create, update |
 | Other type-specific fields and related metadata | READ_ONLY; preserved in API snapshots |
 | Custom/unknown entity modules | UNMANAGED; generic record observed |
-| Permissions and destructive operations | UNMANAGED; never mutated |
+| Permissions | UNMANAGED; never mutated |
+| Explicit tombstones for entities, properties, posts, relations | DELETE requires `--allow-delete`; live certification pending |
 | Binary assets and external files | UNMANAGED; metadata only, no downloads |
 
 Unknown property types, unknown visibility values, inaccessible relation targets, and unmappable tags stop import rather than silently discard data. Such a campaign needs adapter extension or visibility correction before synchronization. A full campaign export may therefore require more adapter coverage than the representative MVP fixtures.

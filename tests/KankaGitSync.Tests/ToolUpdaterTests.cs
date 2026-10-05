@@ -61,6 +61,21 @@ public sealed class ToolUpdaterTests
     }
 
     [Fact]
+    public async Task PublicUpdateDoesNotSendGitHubCredentials()
+    {
+        using var handler = new Handler(request =>
+        {
+            Assert.Null(request.Headers.Authorization);
+            return Task.FromResult(JsonResponse(Release("0.1.5")));
+        });
+        using var updater = new ToolUpdater("0.1.5", handler);
+
+        var result = await updater.UpdateAsync(default);
+
+        Assert.False(result.Updated);
+    }
+
+    [Fact]
     public async Task UnsafeRedirectIsRejectedWithoutInstalling()
     {
         using var handler = new Handler(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("latest", StringComparison.Ordinal)
@@ -127,7 +142,7 @@ public sealed class ToolUpdaterTests
             using var output = new StringWriter();
             using var error = new StringWriter();
             Assert.Equal(0, await CommandLine.RunAsync(["update"], directory, output, error, createUpdater: () =>
-                new ToolUpdater("0.1.5", new Handler(_ => Task.FromResult(JsonResponse(Release("0.1.5"))))), readEnvironment: _ => Token));
+                new ToolUpdater("0.1.5", new Handler(_ => Task.FromResult(JsonResponse(Release("0.1.5")))))));
             Assert.Contains("already up to date", output.ToString(), StringComparison.OrdinalIgnoreCase);
         }
         finally
