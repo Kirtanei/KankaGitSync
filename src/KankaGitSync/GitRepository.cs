@@ -76,6 +76,16 @@ public sealed class GitRepository(string root)
         return result.ExitCode switch { 0 => true, 1 => false, _ => throw new SyncException("Cannot inspect Git ancestry.") };
     }
 
+    public async Task<(string Owner, string Repository)> GitHubOriginAsync()
+    {
+        var remote = await RequireAsync(["remote", "get-url", "origin"]).ConfigureAwait(false);
+        var match = System.Text.RegularExpressions.Regex.Match(remote,
+            "^(?:git@github\\.com:|https://github\\.com/)([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\\.git)?$",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        if (!match.Success) throw new SyncException("origin must be a GitHub SSH or HTTPS repository URL for webhook queue synchronization.");
+        return (match.Groups[1].Value, match.Groups[2].Value);
+    }
+
     public async Task<SortedDictionary<string, string>> ReadTreeAsync(string? reference)
     {
         var result = new SortedDictionary<string, string>(StringComparer.Ordinal);

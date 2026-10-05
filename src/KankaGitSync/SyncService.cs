@@ -4,7 +4,7 @@ namespace KankaGitSync;
 
 public sealed class SyncService(GitRepository repository, IKankaClient client, OperationLedger ledger)
 {
-    public async Task<Snapshot> FetchAsync(CancellationToken cancellationToken = default)
+    public async Task<Snapshot> FetchAsync(TextWriter? output = null, CancellationToken cancellationToken = default)
     {
         var live = await repository.ResolveAsync(GitRepository.Live).ConfigureAwait(false);
         var previousFiles = await repository.ReadTreeAsync(live).ConfigureAwait(false);
@@ -12,10 +12,36 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         var mainFiles = await repository.ReadTreeAsync(await repository.ResolveAsync(GitRepository.Main).ConfigureAwait(false)).ConfigureAwait(false);
         if (mainFiles.TryGetValue(".kanka/users.yml", out var users)) previous.Users = YamlCodec.Read(users);
         ledger.RestoreMappings(previous);
-        var current = await new KankaAdapter(client).FetchAsync(previous, cancellationToken).ConfigureAwait(false);
+        var progress = output == null ? null : new FetchProgressWriter(output);
+        if (progress != null) await progress.BeginAsync().ConfigureAwait(false);
+        Snapshot current;
+        try
+        {
+            current = await new KankaAdapter(client).FetchAsync(previous, cancellationToken,
+                progress == null ? null : progress.ReportAsync).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (progress != null) await progress.CompleteAsync().ConfigureAwait(false);
+        }
         var files = WorldFiles.Write(current);
         if (mainFiles.TryGetValue(".kanka/config.yml", out var configuration)) files[".kanka/config.yml"] = configuration;
         var message = ImportMessage(previous, current);
+        await repository.CommitLiveAsync(files, message).ConfigureAwait(false);
+        return current;
+    }
+
+    public async Task<Snapshot> FetchQueuedAsync(IReadOnlyList<QueueEvent> events, CancellationToken cancellationToken = default)
+    {
+        var live = await repository.ResolveAsync(GitRepository.Live).ConfigureAwait(false);
+        var previous = WorldFiles.Read(await repository.ReadTreeAsync(live).ConfigureAwait(false));
+        var mainFiles = await repository.ReadTreeAsync(await repository.ResolveAsync(GitRepository.Main).ConfigureAwait(false)).ConfigureAwait(false);
+        if (mainFiles.TryGetValue(".kanka/users.yml", out var users)) previous.Users = YamlCodec.Read(users);
+        ledger.RestoreMappings(previous);
+        var current = await new KankaAdapter(client).FetchQueuedAsync(previous, events, cancellationToken).ConfigureAwait(false);
+        var files = WorldFiles.Write(current);
+        if (mainFiles.TryGetValue(".kanka/config.yml", out var configuration)) files[".kanka/config.yml"] = configuration;
+        var message = ImportMessage(previous, current) + string.Concat(events.Select(value => "\nKanka-Queue-Issue: " + value.IssueNumber));
         await repository.CommitLiveAsync(files, message).ConfigureAwait(false);
         return current;
     }
@@ -38,9 +64,9 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         throw new SyncException("Push blocked: kanka/live contains unintegrated remote changes. Review and merge or explicitly reject them with a Git merge commit.");
     }
 
-    public async Task<IReadOnlyList<Operation>> PlanAsync(bool fetch, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Operation>> PlanAsync(bool fetch, TextWriter? output = null, CancellationToken cancellationToken = default)
     {
-        var remote = fetch ? await FetchAsync(cancellationToken).ConfigureAwait(false) :
+        var remote = fetch ? await FetchAsync(output, cancellationToken).ConfigureAwait(false) :
             WorldFiles.Read(await repository.ReadTreeAsync(await repository.ResolveAsync(GitRepository.Live).ConfigureAwait(false)).ConfigureAwait(false));
         await EnsureIntegratedAsync().ConfigureAwait(false);
         var local = WorldFiles.Read(await repository.ReadTreeAsync(GitRepository.Main).ConfigureAwait(false));
@@ -51,7 +77,7 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
     {
         await repository.EnsureCleanMainAsync().ConfigureAwait(false);
         var main = await repository.ResolveAsync(GitRepository.Main).ConfigureAwait(false) ?? throw new SyncException("Import a campaign first.");
-        var remote = await FetchAsync(cancellationToken).ConfigureAwait(false);
+        var remote = await FetchAsync(output, cancellationToken).ConfigureAwait(false);
         await EnsureIntegratedAsync().ConfigureAwait(false);
         ledger.RequireSettled();
         var local = WorldFiles.Read(await repository.ReadTreeAsync(main).ConfigureAwait(false));
@@ -61,10 +87,11 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         if (!approvePrivacy && operations.Any(operation => operation.PrivacyChange))
             throw new SyncException("Review publication/privacy changes, then use --approve-privacy to apply this plan.");
         if (operations.Count == 0) return;
-        await ApplyAndVerifyAsync(main, operations, remote, cancellationToken).ConfigureAwait(false);
+        await ApplyAndVerifyAsync(main, operations, remote, output, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task ApplyAndVerifyAsync(string main, IReadOnlyList<Operation> operations, Snapshot remote, CancellationToken cancellationToken)
+    private async Task ApplyAndVerifyAsync(string main, IReadOnlyList<Operation> operations, Snapshot remote, TextWriter output,
+        CancellationToken cancellationToken)
     {
         Exception? applyFailure = null;
         try
@@ -79,7 +106,7 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         {
             // A cancelled or failed mutation may have reached Kanka; recovery must not inherit cancellation.
             using var recovery = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-            await FetchAsync(recovery.Token).ConfigureAwait(false);
+            await FetchAsync(output, recovery.Token).ConfigureAwait(false);
         }
         catch (Exception recoveryFailure)
         {

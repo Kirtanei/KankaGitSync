@@ -1,0 +1,32 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore --locked-mode
+      - run: dotnet format --no-restore --verify-no-changes
+      - run: dotnet build -c Release --no-restore
+      - run: dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=teamcity -p:Threshold=80 -p:ThresholdType=line -p:ThresholdStat=total
+      - name: Verify version tag
+        shell: bash
+        run: |
+          package_version="$(dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | tail -n 1)"
+          test "v${package_version}" = "${GITHUB_REF_NAME}"
+      - run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" artifacts/packages/KankaGitSync.*.nupkg --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes

@@ -6,6 +6,8 @@ The [project ruleset](docs/project-ruleset-v0.1.md) is the design contract. This
 
 ## Build and install
 
+Long-running remote reads show a progress bar with completed resources, elapsed time, and an estimated remaining duration. This applies to `import`, `fetch`, `plan`, `push`, and `doctor` whenever they fetch Kanka. Fetch uses Kanka's related-entity response to read an entity and its managed properties, posts, and relations in one request.
+
 Prerequisites: .NET 10 SDK and Git on PATH.
 
 ```sh
@@ -21,19 +23,21 @@ Coverage statistics go to the console. Compiler and SonarAnalyzer warnings fail 
 
 Use `git kanka help` or `git-kanka --help`; Git intercepts `git kanka --help` as a request for an installed manual page.
 
-### Upgrade and recover a zero-resource import
+### Update and recover a zero-resource import
 
 Version 0.1.1 fixes category detection for Kanka's current entity responses. Version 0.1.0 could preserve every entity as an unmanaged snapshot while reporting a successful import with zero editable resources.
 
 Version 0.1.2 also handles boolean checkbox values in API responses and includes a code location in sanitized failure messages. Earlier versions could fail with `InvalidOperationException` when reading a checkbox as text.
 
-From this application's source directory, rebuild and update your installed tool:
+To update an installed tool from the latest stable private GitHub Release, run this from any directory:
 
 ```sh
-dotnet build -c Release
-dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-dotnet tool update --global --add-source ./artifacts/packages --version 0.1.4 KankaGitSync
+git kanka update
 ```
+
+Set `KANKA_GITHUB_TOKEN` once as a user or machine environment variable on every computer first. For the private `Kirtanei/KankaGitSync` repository, the token needs **Contents: Read** permission. The updater reads this environment variable only; it never reads, writes, or logs world-repository credentials. It downloads the latest stable release package, verifies its package identity and version, then installs that exact version globally. On Windows, open a new terminal after a successful update.
+
+To publish a release, update `<Version>` in `src/KankaGitSync/KankaGitSync.csproj`, commit and push it, then push the exact matching immutable tag—for example, `git tag v0.1.5` followed by `git push origin v0.1.5`. The release workflow reruns formatting, build, test, coverage, and package checks before attaching `KankaGitSync.<version>.nupkg` to the private GitHub Release. A tag that does not match the project version fails safely without publishing.
 
 Then return to your world repository, create your persistent `.env` as described below, and recover through the normal fetch/merge workflow:
 
@@ -62,7 +66,7 @@ git add .gitignore .kanka
 git commit -m "Configure campaign synchronization"
 ```
 
-Run this from your world repository or any of its subfolders (available in version 0.1.4):
+Run this from your world repository or any of its subfolders (available in version 0.1.5):
 
 ```sh
 git kanka init-env

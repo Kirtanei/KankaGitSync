@@ -71,9 +71,21 @@ internal sealed class TestCampaign : IKankaClient
     public Task<JsonObject> GetAsync(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var includesRelated = path.Contains("?related=1", StringComparison.Ordinal);
         path = path.Split('?')[0];
         BeforeGet?.Invoke(path);
-        return Task.FromResult(Records.TryGetValue(path, out var value) ? value.Copy() : throw new SyncException("Fake resource missing."));
+        if (!Records.TryGetValue(path, out var value)) throw new SyncException("Fake resource missing.");
+        var result = value.Copy();
+        if (includesRelated) AddRelatedResources(result);
+        return Task.FromResult(result);
+    }
+
+    private void AddRelatedResources(JsonObject entity)
+    {
+        var entityId = entity.Number("entity_id").ToString(System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var endpoint in new[] { "attributes", "posts", "relations" })
+            entity[endpoint] = new JsonArray(Records.Where(pair => pair.Key.StartsWith($"entities/{entityId}/{endpoint}/", StringComparison.Ordinal))
+                .Select(pair => (JsonNode?)pair.Value.Copy()).ToArray());
     }
 
     public Task<IReadOnlyList<JsonObject>> ListAsync(string path, CancellationToken cancellationToken)

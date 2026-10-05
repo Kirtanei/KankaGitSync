@@ -4,16 +4,76 @@ namespace KankaGitSync;
 
 public sealed class KankaAdapter(IKankaClient client)
 {
-    public async Task<Snapshot> FetchAsync(Snapshot previous, CancellationToken cancellationToken)
+    private const int RequestsPerManagedEntity = 1;
+
+    public async Task<Snapshot> FetchAsync(Snapshot previous, CancellationToken cancellationToken,
+        Func<FetchProgress, Task>? reportProgress = null)
     {
         var snapshot = new Snapshot { Users = previous.Users.Copy() };
         foreach (var mapping in previous.Mappings) snapshot.Mappings[mapping.Key] = mapping.Value;
         var entities = await client.ListAsync("entities", cancellationToken).ConfigureAwait(false);
         foreach (var entity in entities) RegisterEntity(snapshot, entity);
-        foreach (var entity in entities) await FetchEntityAsync(snapshot, entity, cancellationToken).ConfigureAwait(false);
+        var managedEntityIds = snapshot.Mappings.Values.Where(mapping => mapping.Kind == "entity")
+            .Select(mapping => mapping.EntityId).ToHashSet();
+        var managedEntities = entities.Where(entity => managedEntityIds.Contains(entity.Number("id"))).ToArray();
+        var total = 2 + managedEntities.Length * RequestsPerManagedEntity;
+        var completed = 1;
+        await ReportAsync(reportProgress, completed, total).ConfigureAwait(false);
+        foreach (var entity in managedEntities)
+            await FetchEntityAsync(snapshot, entity, cancellationToken,
+                () => ReportAsync(reportProgress, ++completed, total)).ConfigureAwait(false);
         await ReadMembersAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        await ReportAsync(reportProgress, ++completed, total).ConfigureAwait(false);
         return snapshot;
     }
+
+    public async Task<Snapshot> FetchQueuedAsync(Snapshot previous, IReadOnlyList<QueueEvent> events, CancellationToken cancellationToken)
+    {
+        var snapshot = new Snapshot { Users = previous.Users.Copy() };
+        foreach (var pair in previous.Mappings) snapshot.Mappings[pair.Key] = pair.Value;
+        foreach (var pair in previous.Resources) snapshot.Resources[pair.Key] = pair.Value;
+        foreach (var pair in previous.Raw) snapshot.Raw[pair.Key] = pair.Value.Copy();
+        foreach (var group in events.GroupBy(value => (value.Endpoint, value.ChildId)))
+        {
+            if (group.All(value => value.Event == "deleted")) RemoveEntity(snapshot, group.Key.Endpoint, group.Key.ChildId);
+            else await FetchQueuedEntityAsync(snapshot, group.Key.Endpoint, group.Key.ChildId, cancellationToken).ConfigureAwait(false);
+        }
+        return snapshot;
+    }
+
+    private async Task FetchQueuedEntityAsync(Snapshot snapshot, string endpoint, long childId, CancellationToken cancellationToken)
+    {
+        var category = Categories.Endpoints.SingleOrDefault(pair => pair.Value == endpoint).Key
+            ?? throw new SyncException("GitHub webhook queue has an unsupported Kanka endpoint.");
+        var raw = await client.GetAsync($"{endpoint}/{childId}?related=1", cancellationToken).ConfigureAwait(false);
+        if (PositiveId(raw, "id") != childId || PositiveId(raw, "entity_id") <= 0) throw new SyncException("API entity identity mismatch.");
+        var pair = snapshot.Mappings.SingleOrDefault(value => value.Value.Kind == "entity" && value.Value.Category == category && value.Value.ChildId == childId);
+        var identifier = pair.Key ?? Canonical.NewId(raw.Text("name"), snapshot.Mappings.Keys);
+        var mapping = new Mapping(raw.Number("entity_id"), childId, category, "entity", null);
+        RemoveEntity(snapshot, endpoint, childId);
+        snapshot.Mappings[identifier] = mapping;
+        snapshot.Raw[identifier] = raw.Copy();
+        snapshot.Resources[identifier] = Import(identifier, mapping, raw, snapshot.Mappings);
+        foreach (var kind in new[] { "property", "post", "relation" })
+            foreach (var child in RelatedChildren(raw, AttachmentEndpoint(kind)))
+                RegisterAttachment(snapshot, identifier, mapping, kind, child);
+    }
+
+    private static void RemoveEntity(Snapshot snapshot, string endpoint, long childId)
+    {
+        var category = Categories.Endpoints.SingleOrDefault(pair => pair.Value == endpoint).Key;
+        if (category == null) throw new SyncException("GitHub webhook queue has an unsupported Kanka endpoint.");
+        var identifier = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.Category == category && pair.Value.ChildId == childId).Key;
+        if (identifier == null) return;
+        foreach (var resource in snapshot.Mappings.Where(pair => pair.Key == identifier || pair.Value.Owner == identifier).Select(pair => pair.Key).ToArray())
+        {
+            snapshot.Resources.Remove(resource);
+            snapshot.Raw.Remove(resource);
+        }
+    }
+
+    private static Task ReportAsync(Func<FetchProgress, Task>? reportProgress, int completed, int total) =>
+        reportProgress?.Invoke(new FetchProgress(completed, total)) ?? Task.CompletedTask;
 
     private static void RegisterEntity(Snapshot snapshot, JsonObject entity)
     {
@@ -29,23 +89,26 @@ public sealed class KankaAdapter(IKankaClient client)
         snapshot.Mappings[identifier] = new Mapping(entityId, PositiveId(entity, "child_id"), category, "entity", null);
     }
 
-    private async Task FetchEntityAsync(Snapshot snapshot, JsonObject entity, CancellationToken cancellationToken)
+    private async Task FetchEntityAsync(Snapshot snapshot, JsonObject entity, CancellationToken cancellationToken, Func<Task> completeRequest)
     {
         if (snapshot.Raw.ContainsKey("unmanaged-" + entity.Number("id"))) return;
         var pair = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == entity.Number("id"));
         if (pair.Key == null) return;
         var mapping = pair.Value;
         var raw = await client.GetAsync($"{Categories.Endpoint(mapping.Category)}/{mapping.ChildId}?related=1", cancellationToken).ConfigureAwait(false);
+        await completeRequest().ConfigureAwait(false);
         if (PositiveId(raw, "entity_id") != mapping.EntityId || PositiveId(raw, "id") != mapping.ChildId)
             throw new SyncException("API entity identity mismatch.");
         snapshot.Raw[pair.Key] = raw.Copy();
         snapshot.Resources[pair.Key] = Import(pair.Key, mapping, raw, snapshot.Mappings);
         foreach (var kind in new[] { "property", "post", "relation" })
-        {
-            var children = await client.ListAsync($"entities/{mapping.EntityId}/{AttachmentEndpoint(kind)}", cancellationToken).ConfigureAwait(false);
-            foreach (var child in children) RegisterAttachment(snapshot, pair.Key, mapping, kind, child);
-        }
+            foreach (var child in RelatedChildren(raw, AttachmentEndpoint(kind)))
+                RegisterAttachment(snapshot, pair.Key, mapping, kind, child);
     }
+
+    private static IEnumerable<JsonObject> RelatedChildren(JsonObject raw, string endpoint) =>
+        (raw[endpoint] as JsonArray ?? throw new SyncException("API related response is incomplete; fetch stopped without changing Git."))
+        .Select(child => child as JsonObject ?? throw new SyncException("API related response contains an invalid resource."));
 
     private static string EntityCategory(JsonObject entity)
     {

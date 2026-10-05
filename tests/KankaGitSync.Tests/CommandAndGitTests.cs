@@ -56,12 +56,12 @@ public sealed class CommandAndGitTests
         await fixture.Service.FetchAsync();
         using var output = new StringWriter();
         using var errors = new StringWriter();
-        foreach (var command in new[] { "validate", "doctor", "status", "diff", "pull" })
+        foreach (var command in new[] { "validate", "doctor", "status", "diff" })
             Assert.Equal(0, await CommandLine.RunAsync([command], fixture.Git.Root, output, errors));
+        Assert.Equal(0, await CommandLine.RunAsync(["pull"], fixture.Git.Root, output, errors, createGitHub: EmptyQueue));
         Assert.Contains("Alice", output.ToString());
         Assert.Contains("Push blocked", output.ToString());
-        Assert.NotNull(await fixture.Git.ResolveAsync("MERGE_HEAD"));
-        await fixture.Git.RequireAsync(["merge", "--abort"]);
+        Assert.Null(await fixture.Git.ResolveAsync("MERGE_HEAD"));
         Assert.Equal(0, await CommandLine.RunAsync(["publish", "maximilian"], fixture.Git.Root, output, errors));
         Assert.Equal(0, await CommandLine.RunAsync(["delete", "maximilian-journal"], fixture.Git.Root, output, errors));
         Assert.True(fixture.Working().Resources["maximilian-journal"].Deleted);
@@ -102,6 +102,21 @@ public sealed class CommandAndGitTests
     }
 
     [Fact]
+    public async Task FetchReportsProgressWithElapsedAndRemainingTime()
+    {
+        using var fixture = new TestRepository();
+        await fixture.InitializeAsync();
+        using var output = new StringWriter();
+
+        await fixture.Service.FetchAsync(output);
+
+        Assert.Contains("Discovering Kanka resources", output.ToString());
+        Assert.Contains("Fetching Kanka [####################] 5/5 (100%)", output.ToString());
+        Assert.Contains("elapsed", output.ToString());
+        Assert.Contains("remaining", output.ToString());
+    }
+
+    [Fact]
     public async Task StructuredPullResolvesAdjacentIndependentYamlEdits()
     {
         using var fixture = new TestRepository();
@@ -114,11 +129,11 @@ public sealed class CommandAndGitTests
         await fixture.Service.FetchAsync();
         using var output = new StringWriter();
         using var errors = new StringWriter();
-        Assert.Equal(0, await CommandLine.RunAsync(["pull"], fixture.Git.Root, output, errors));
+        Assert.Equal(0, await CommandLine.RunAsync(["pull"], fixture.Git.Root, output, errors, createGitHub: EmptyQueue));
         var merged = fixture.Working().Resources["maximilian-population"];
         Assert.Equal("Residents", merged.Name);
         Assert.Equal("900000", merged.Metadata.Text("value"));
-        Assert.NotNull(await fixture.Git.ResolveAsync("MERGE_HEAD"));
+        Assert.Null(await fixture.Git.ResolveAsync("MERGE_HEAD"));
     }
 
     [Fact]
@@ -134,7 +149,18 @@ public sealed class CommandAndGitTests
         await fixture.Service.FetchAsync();
         using var output = new StringWriter();
         using var errors = new StringWriter();
-        Assert.Equal(1, await CommandLine.RunAsync(["pull"], fixture.Git.Root, output, errors));
+        Assert.Equal(1, await CommandLine.RunAsync(["pull"], fixture.Git.Root, output, errors, createGitHub: EmptyQueue));
         Assert.Contains("posts/maximilian-journal.md", await fixture.Git.RequireAsync(["diff", "--name-only", "--diff-filter=U"]));
+    }
+
+    private static GitHubIssuesClient EmptyQueue(GitRepository _) => new("owner", "repository", "test-token", new EmptyQueueHandler());
+
+    private sealed class EmptyQueueHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+            });
     }
 }
