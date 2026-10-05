@@ -4,7 +4,7 @@ Kanka Git Sync records a Kanka campaign in a Git repository while leaving Kanka 
 
 The full manual is in the [GitHub Wiki](https://github.com/Kirtanei/KankaGitSync/wiki): [installation](https://github.com/Kirtanei/KankaGitSync/wiki/Installation), [daily workflow](https://github.com/Kirtanei/KankaGitSync/wiki/Daily-Workflow), [command reference](https://github.com/Kirtanei/KankaGitSync/wiki/Command-Reference), [architecture](https://github.com/Kirtanei/KankaGitSync/wiki/Architecture-Overview), and [safety/recovery](https://github.com/Kirtanei/KankaGitSync/wiki/Troubleshooting-and-Recovery).
 
-> Documentation is produced with AI assistance. Verify operational claims against the current release and `git kanka help`.
+> **AI transparency:** This project and its documentation are developed with AI assistance. Human review remains required for code, configuration, operational decisions, and campaign changes. Verify operational claims against the current release and `git kanka help`.
 
 ## Quick start
 
