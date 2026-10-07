@@ -4,6 +4,8 @@
 
 The repository now defines the `1.0.0` Windows release workflow, versioned x64/Arm64 installer assets, SHA-256 manifest, GitHub provenance attestations, installer deployment marker, and manual-update guidance. This implementation work is not certification: the RC disposable-campaign, lost-response, and clean-VM evidence required by `docs/release-certification.md` remains outstanding before `v1.0.0` can be created.
 
+RC.4 live disposable-campaign check on 2026-10-07: the installed Windows x64 client completed a full fetch of eight resources; detected unintegrated external campaign edits and blocked publication; merged the authorized disposable state; produced a zero-operation plan; published one managed character-body update; recorded `refs/kanka/published` and `refs/kanka/verified`; and produced a second zero-operation plan. No credentials or raw responses were recorded. This is partial evidence only; the player UI, lost-response, delete, privacy/conflict, and Arm64 clean-VM gates remain outstanding.
+
 Partial live acceptance on Windows, 2026-10-07, against disposable Kanka campaign `426901` using the documented v1.0 API. The campaign contains only acceptance fixtures; no credentials are recorded here. Release build and formatting verification passed, and all 152 tests passed with console-only coverage of 84.48% lines, 74.01% branches, and 88.92% methods. The following live behaviors were exercised and recovered into Git history:
 
 | Check | Result |
