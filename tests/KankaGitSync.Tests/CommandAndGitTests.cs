@@ -3,7 +3,7 @@ namespace KankaGitSync.Tests;
 public sealed class CommandAndGitTests
 {
     [Fact]
-    public async Task InvalidJsonTypesReportCodeLocationWithoutContent()
+    public async Task InvalidJsonTypesReportSanitizedFailureWithoutContent()
     {
         using var fixture = new TestRepository();
         await fixture.InitializeAsync();
@@ -13,8 +13,9 @@ public sealed class CommandAndGitTests
         using var output = new StringWriter();
         using var errors = new StringWriter();
         Assert.Equal(1, await CommandLine.RunAsync(["validate"], fixture.Git.Root, output, errors));
-        Assert.Contains(" at JsonFields.Text", errors.ToString());
-        Assert.DoesNotContain("sensitive-value", errors.ToString());
+        var failure = errors.ToString();
+        Assert.Contains("Operation failed (InvalidOperationException)", failure, StringComparison.Ordinal);
+        Assert.DoesNotContain("sensitive-value", failure, StringComparison.Ordinal);
     }
 
     [Theory]
