@@ -25,7 +25,12 @@ function Write-Evidence([string] $Name, [string] $Text) {
 }
 
 function Invoke-Checked([string] $Name, [scriptblock] $Action) {
-    $output = & $Action 2>&1 | Out-String
+    try { $output = & $Action 2>&1 | Out-String }
+    catch {
+        $output = $_ | Out-String
+        Write-Evidence "$Name.txt" $output
+        throw
+    }
     Write-Evidence "$Name.txt" $output
     if ($LASTEXITCODE -ne 0) { throw "$Name failed. See sanitized evidence." }
     return $output
@@ -36,12 +41,30 @@ function Require-NoKankaProcess {
     if ($running.Count -ne 0) { throw "A prior git-kanka process is still running ($($running.Id -join ', ')). Wait for it before retrying." }
 }
 
+function Wait-KankaExit([int] $RootProcessId) {
+    while ($true) {
+        $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $RootProcessId" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty ProcessId)
+        $root = Get-Process -Id $RootProcessId -ErrorAction SilentlyContinue
+        $runningChildren = @($children | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
+        if ($null -eq $root -and $runningChildren.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
 function Invoke-Kanka([string] $Name, [string[]] $Arguments) {
     Require-NoKankaProcess
     Push-Location $WorldPath
     try {
-        # Git waits for the subcommand. The installer launcher can otherwise detach its child process.
-        return Invoke-Checked $Name { & git kanka @Arguments }
+        # The installer launcher may hand work to a child process. Wait for that child before another operation can acquire the ledger.
+        return Invoke-Checked $Name {
+            $outputPath = Join-Path $evidence "$Name.stdout.txt"
+            $errorPath = Join-Path $evidence "$Name.stderr.txt"
+            $process = Start-Process -FilePath $ToolPath -ArgumentList $Arguments -WorkingDirectory $WorldPath -PassThru -RedirectStandardOutput $outputPath -RedirectStandardError $errorPath -NoNewWindow
+            Wait-KankaExit $process.Id
+            Get-Content -LiteralPath $outputPath,$errorPath -ErrorAction SilentlyContinue
+            if ($process.ExitCode -ne 0) { throw "git-kanka exited with code $($process.ExitCode)." }
+        }
     }
     finally { Pop-Location }
 }
