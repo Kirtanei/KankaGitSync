@@ -62,6 +62,22 @@ public sealed class SynchronizationTests
         Assert.Single(fixture.Campaign.Writes);
     }
 
+    internal static Resource NewEntity(string identifier, string body = "History.", bool publish = true) => new(identifier, "entity", null,
+        new JsonObject
+        {
+            ["id"] = identifier,
+            ["name"] = identifier,
+            ["category"] = "location",
+            ["type"] = "",
+            ["publish"] = publish,
+            ["visibility"] = new JsonObject { ["private"] = false },
+            ["tags"] = new JsonArray(),
+            ["fields"] = new JsonObject()
+        }, body);
+}
+
+public sealed class SynchronizationCreationTests
+{
     [Fact]
     public async Task MissingFilesNeverDeleteRemoteObjectsAndTombstonesRequireExplicitAcknowledgement()
     {
@@ -88,8 +104,8 @@ public sealed class SynchronizationTests
         using var fixture = new TestRepository();
         await fixture.InitializeAsync();
         var snapshot = fixture.Working();
-        var first = NewEntity("chapel", "[[keeper]]");
-        var second = NewEntity("keeper", "[[chapel]]");
+        var first = SynchronizationTests.NewEntity("chapel", "[[keeper]]");
+        var second = SynchronizationTests.NewEntity("keeper", "[[chapel]]");
         snapshot.Resources[first.Id] = first;
         snapshot.Resources[second.Id] = second;
         fixture.Save(snapshot);
@@ -122,7 +138,10 @@ public sealed class SynchronizationTests
         await fixture.Service.PushAsync(false, TextWriter.Null);
         Assert.Equal(3, fixture.Campaign.Writes.Count);
     }
+}
 
+public sealed class SynchronizationRecoveryTests
+{
     [Fact]
     public async Task PartialFailureRefetchesAndNeverBlindlyReplays()
     {
@@ -177,7 +196,10 @@ public sealed class SynchronizationTests
         Assert.Null(await fixture.Git.ResolveAsync(GitRepository.Verified));
         await Assert.ThrowsAsync<SyncException>(() => fixture.Service.EnsureIntegratedAsync());
     }
+}
 
+public sealed class SynchronizationPublicationTests
+{
     [Fact]
     public async Task NewAttachmentsAndTagChangesRoundTrip()
     {
@@ -229,16 +251,4 @@ public sealed class SynchronizationTests
         Assert.Null(await fixture.Git.ResolveAsync(GitRepository.Verified));
     }
 
-    internal static Resource NewEntity(string identifier, string body = "History.", bool publish = true) => new(identifier, "entity", null,
-        new JsonObject
-        {
-            ["id"] = identifier,
-            ["name"] = identifier,
-            ["category"] = "location",
-            ["type"] = "",
-            ["publish"] = publish,
-            ["visibility"] = new JsonObject { ["private"] = false },
-            ["tags"] = new JsonArray(),
-            ["fields"] = new JsonObject()
-        }, body);
 }
