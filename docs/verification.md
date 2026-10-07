@@ -6,6 +6,8 @@ The repository now defines the `1.0.0` Windows release workflow, versioned x64/A
 
 RC.4 live disposable-campaign check on 2026-10-07: the installed Windows x64 client completed a full fetch of eight resources; detected unintegrated external campaign edits and blocked publication; merged the authorized disposable state; produced a zero-operation plan; published one managed character-body update; recorded `refs/kanka/published` and `refs/kanka/verified`; and produced a second zero-operation plan. No credentials or raw responses were recorded. This is partial evidence only; the player UI, lost-response, delete, privacy/conflict, and Arm64 clean-VM gates remain outstanding.
 
+Player-edit and prose-conflict check on 2026-10-07: a player UI edit to the managed character body imported to `kanka/live` with player attribution; a push refetched and blocked without writing; integration against the concurrent local body update created an unresolved Git prose conflict; the authorized disposable resolution retained the remote player content; and a subsequent full plan produced zero API operations. The disposable-world history was pushed to its test repository.
+
 Partial live acceptance on Windows, 2026-10-07, against disposable Kanka campaign `426901` using the documented v1.0 API. The campaign contains only acceptance fixtures; no credentials are recorded here. Release build and formatting verification passed, and all 152 tests passed with console-only coverage of 84.48% lines, 74.01% branches, and 88.92% methods. The following live behaviors were exercised and recovered into Git history:
 
 | Check | Result |
