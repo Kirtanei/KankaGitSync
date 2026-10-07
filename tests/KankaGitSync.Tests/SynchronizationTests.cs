@@ -62,6 +62,26 @@ public sealed class SynchronizationTests
         Assert.Single(fixture.Campaign.Writes);
     }
 
+    [Fact]
+    public async Task VolatileRelationshipSyncMarkerDoesNotBlockPublication()
+    {
+        using var fixture = new TestRepository();
+        fixture.Campaign.Records["characters/1"]["organisations"] = new JsonObject { ["data"] = new JsonArray(), ["sync"] = "before" };
+        await fixture.InitializeAsync();
+        var snapshot = fixture.Working();
+        snapshot.Resources["maximilian"] = snapshot.Resources["maximilian"] with { Body = "Updated history." };
+        fixture.Save(snapshot);
+        await fixture.CommitAsync();
+        var characterReads = 0;
+        fixture.Campaign.BeforeGet = path =>
+        {
+            if (path == "characters/1" && ++characterReads == 2)
+                fixture.Campaign.Records[path]["organisations"]!["sync"] = "after";
+        };
+        await fixture.Service.PushAsync(false, TextWriter.Null);
+        Assert.Single(fixture.Campaign.Writes);
+    }
+
     internal static Resource NewEntity(string identifier, string body = "History.", bool publish = true) => new(identifier, "entity", null,
         new JsonObject
         {
