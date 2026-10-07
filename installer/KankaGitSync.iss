@@ -47,13 +47,22 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   PathValue: String;
+  Directory: String;
 begin
   if CurStep <> ssPostInstall then Exit;
+  Directory := NormalizePath(ExpandConstant('{app}'));
   if RegQueryStringValue(HKCU, 'Environment', 'Path', PathValue) then begin
-    if not PathContains(PathValue, ExpandConstant('{app}')) then
-      RegWriteExpandStringValue(HKCU, 'Environment', 'Path', PathValue + ';' + ExpandConstant('{app}'));
+    if PathContains(PathValue, Directory) then begin
+      StringChangeEx(PathValue, ';' + Directory, '', True);
+      StringChangeEx(PathValue, Directory + ';', '', True);
+      if CompareText(PathValue, Directory) = 0 then PathValue := '';
+    end;
+    if PathValue = '' then
+      RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Directory)
+    else
+      RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Directory + ';' + PathValue);
   end else
-    RegWriteExpandStringValue(HKCU, 'Environment', 'Path', ExpandConstant('{app}'));
+    RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Directory);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
