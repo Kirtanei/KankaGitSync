@@ -103,7 +103,7 @@ try {
     if (-not (Test-Path -LiteralPath $ToolPath)) { throw "Installed tool not found: $ToolPath" }
     Require-CleanRepository 'source-status' $repositoryRoot
     Require-CleanRepository 'world-status' $WorldPath
-    Write-Evidence 'environment.json' (([ordered]@{ run_id = $runId; tool = (& $ToolPath --version 2>&1 | Out-String).Trim(); windows = [Environment]::OSVersion.VersionString; git = (git --version); utc = [DateTime]::UtcNow.ToString('O') } | ConvertTo-Json -Compress))
+    Write-Evidence 'environment.json' (([ordered]@{ run_id = $runId; tool = (& $ToolPath help 2>&1 | Out-String).Trim(); windows = [Environment]::OSVersion.VersionString; git = (git --version); utc = [DateTime]::UtcNow.ToString('O') } | ConvertTo-Json -Compress))
 
     if (-not $SkipQualityGates) {
         Push-Location $repositoryRoot
