@@ -4,15 +4,18 @@ param(
     [string] $ToolPath = (Join-Path $env:LOCALAPPDATA 'Programs\KankaGitSync\git-kanka.exe'),
     [switch] $RunLive,
     [switch] $KeepFixtures,
-    [switch] $SkipQualityGates
+    [switch] $SkipQualityGates,
+    [string] $RunId,
+    [switch] $ResumeCleanup
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$runId = 'release-cert-' + (Get-Date -Format 'yyyyMMddHHmmss') + '-' + ([guid]::NewGuid().ToString('N').Substring(0, 8))
+$runId = if ([string]::IsNullOrWhiteSpace($RunId)) { 'release-cert-' + (Get-Date -Format 'yyyyMMddHHmmss') + '-' + ([guid]::NewGuid().ToString('N').Substring(0, 8)) } else { $RunId }
 $evidence = Join-Path $repositoryRoot "artifacts\release-certification\$runId"
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null
 $fixtureIds = @("$runId-a", "$runId-b", "$runId-tag")
+$manifestPath = Join-Path $evidence 'manifest.json'
 $certificateThumbprint = $null
 $proxyProcess = $null
 
@@ -28,9 +31,18 @@ function Invoke-Checked([string] $Name, [scriptblock] $Action) {
     return $output
 }
 
+function Require-NoKankaProcess {
+    $running = @(Get-Process git-kanka -ErrorAction SilentlyContinue)
+    if ($running.Count -ne 0) { throw "A prior git-kanka process is still running ($($running.Id -join ', ')). Wait for it before retrying." }
+}
+
 function Invoke-Kanka([string] $Name, [string[]] $Arguments) {
+    Require-NoKankaProcess
     Push-Location $WorldPath
-    try { return Invoke-Checked $Name { & $ToolPath @Arguments } }
+    try {
+        # Git waits for the subcommand. The installer launcher can otherwise detach its child process.
+        return Invoke-Checked $Name { & git kanka @Arguments }
+    }
     finally { Pop-Location }
 }
 
@@ -99,8 +111,19 @@ function Require-CleanRepository([string] $Name, [string] $Path) {
     if (-not [string]::IsNullOrWhiteSpace($status)) { throw "$Name has uncommitted changes." }
 }
 
+function Write-Manifest([string] $Stage) {
+    [ordered]@{
+        run_id = $runId
+        stage = $Stage
+        fixture_ids = $fixtureIds
+        world_path = $WorldPath
+        updated_utc = [DateTime]::UtcNow.ToString('O')
+    } | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -NoNewline
+}
+
 try {
     if (-not (Test-Path -LiteralPath $ToolPath)) { throw "Installed tool not found: $ToolPath" }
+    if ($ResumeCleanup -and -not (Test-Path -LiteralPath $manifestPath)) { throw "No manifest exists for $runId; refusing to guess fixture identifiers." }
     Require-CleanRepository 'source-status' $repositoryRoot
     Require-CleanRepository 'world-status' $WorldPath
     Write-Evidence 'environment.json' (([ordered]@{ run_id = $runId; tool = (& $ToolPath help 2>&1 | Out-String).Trim(); windows = [Environment]::OSVersion.VersionString; git = (git --version); utc = [DateTime]::UtcNow.ToString('O') } | ConvertTo-Json -Compress))
@@ -118,15 +141,28 @@ try {
     }
 
     if (-not $RunLive) { Write-Evidence 'result.txt' 'Preflight passed. Re-run with -RunLive to mutate the disposable campaign.'; exit 0 }
+    Write-Manifest 'baseline'
     Require-ZeroPlan 'baseline-plan'
+    if ($ResumeCleanup) {
+        Write-Manifest 'cleanup'
+        foreach ($identifier in $fixtureIds) { Invoke-Kanka "delete-$identifier" @('delete', $identifier) | Out-Null }
+        Invoke-Checked 'fixture-delete-commit' { git -C $WorldPath add world; git -C $WorldPath commit -m "Delete $runId fixtures" }
+        Invoke-Kanka 'fixture-delete-push' @('push', '--allow-delete', '--approve-privacy') | Out-Null
+        Require-ZeroPlan 'cleanup-zero-plan'
+        Write-Manifest 'complete'
+        Write-Evidence 'result.txt' 'Resumed cleanup passed.'
+        exit 0
+    }
     Write-Fixture $fixtureIds[2] 'tag' "Release certification $runId" 'Temporary certification tag.' $false
     Write-Fixture $fixtureIds[0] 'location' "Release certification A $runId" "Linked to [[$($fixtureIds[1])|fixture B]]." $false
     Write-Fixture $fixtureIds[1] 'location' "Release certification B $runId" "Linked to [[$($fixtureIds[0])|fixture A]]." $true
     Write-FixtureAttachments $fixtureIds[0] $fixtureIds[1]
+    Write-Manifest 'fixtures-authored'
     Invoke-Checked 'fixture-commit' { git -C $WorldPath add world; git -C $WorldPath commit -m "Add $runId fixtures" }
     Invoke-Kanka 'fixture-validate' @('validate') | Out-Null
     Invoke-Kanka 'fixture-push' @('push', '--approve-privacy') | Out-Null
     Require-ZeroPlan 'fixture-zero-plan'
+    Write-Manifest 'fixtures-published'
 
     $first = Join-Path $WorldPath "world\\locations\\$($fixtureIds[0])"
     (Get-Content -Raw -LiteralPath (Join-Path $first 'index.md')).Replace('fixture B]].', 'fixture B, updated]].') | Set-Content -LiteralPath (Join-Path $first 'index.md') -NoNewline
@@ -137,16 +173,19 @@ try {
     Invoke-Checked 'fixture-update-commit' { git -C $WorldPath add world; git -C $WorldPath commit -m "Update $runId fixtures" }
     Invoke-Kanka 'fixture-update-push' @('push', '--approve-privacy') | Out-Null
     Require-ZeroPlan 'fixture-update-zero-plan'
+    Write-Manifest 'fixtures-updated'
 
     Remove-Item -LiteralPath (Join-Path $first 'posts\' + $fixtureIds[0] + '-post.md')
     Invoke-Checked 'missing-file-commit' { git -C $WorldPath add world; git -C $WorldPath commit -m "Remove local $runId post without tombstone" }
     Require-ZeroPlan 'missing-file-zero-plan'
+    Write-Manifest 'missing-file-verified'
 
     if (-not $KeepFixtures) {
         foreach ($identifier in $fixtureIds) { Invoke-Kanka "delete-$identifier" @('delete', $identifier) | Out-Null }
         Invoke-Checked 'fixture-delete-commit' { git -C $WorldPath add world; git -C $WorldPath commit -m "Delete $runId fixtures" }
         Invoke-Kanka 'fixture-delete-push' @('push', '--allow-delete', '--approve-privacy') | Out-Null
         Require-ZeroPlan 'cleanup-zero-plan'
+        Write-Manifest 'complete'
     }
     Write-Evidence 'result.txt' 'Live create, update, privacy, circular-reference, missing-file, and explicit-cleanup matrix passed. Proxy recovery and two-clone conflict phases require their dedicated runner modes.'
 }
