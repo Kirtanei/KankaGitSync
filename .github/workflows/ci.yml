@@ -17,4 +17,4 @@ jobs:
       - run: dotnet format --no-restore --verify-no-changes
       - run: dotnet build -c Release --no-restore
       - run: dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=teamcity -p:Threshold=80 -p:ThresholdType=line -p:ThresholdStat=total
-      - run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
+      - run: dotnet pack src/KankaGitSync -c Release -o artifacts/packages

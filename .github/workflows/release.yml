@@ -28,7 +28,7 @@ jobs:
           $packageVersion = dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | Select-Object -Last 1
           if ("v$packageVersion" -ne $env:GITHUB_REF_NAME) { throw "Tag and package version differ." }
       - name: Package global tool
-        run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/release
+        run: dotnet pack src/KankaGitSync -c Release -o artifacts/release
       - name: Publish self-contained applications
         shell: pwsh
         run: |
