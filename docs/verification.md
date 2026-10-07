@@ -1,5 +1,20 @@
 # Verification record
 
+Partial live acceptance on Windows, 2026-10-07, against disposable Kanka campaign `426901` using the documented v1.0 API. The campaign contains only acceptance fixtures; no credentials are recorded here. Release build and formatting verification passed, and all 152 tests passed with console-only coverage of 84.48% lines, 74.01% branches, and 88.92% methods. The following live behaviors were exercised and recovered into Git history:
+
+| Check | Result |
+| --- | --- |
+| Initial import and repeated fresh import | Passed; zero planned writes after normalized round trip |
+| Entity create and completion | Passed for character, location, organisation, private note, and tag fixtures |
+| Properties, public/admin posts, relations, tags, cross-references, and private content | Created and re-imported successfully |
+| Kanka HTML sanitization | Detected and reconciled; unsupported `data-acceptance` attribute was removed by Kanka and did not silently pass verification |
+| Minimal managed-field update | Passed; a body-only edit planned and published as `UPDATE acceptance-character [entry]`, then received verified/published refs |
+| Missing local file | Passed; removing and committing an admin-post file planned zero remote deletes |
+| Explicit tombstone deletion | Passed; `git kanka delete` created one DELETE plan, a normal push refused it, and `--allow-delete` deleted the disposable post and retained its ID mapping |
+| Post-operation verification and durable ledger | Passed for the verified update and delete runs |
+
+This is not 1.0 certification. It does not cover every documented campaign-content module, binary assets, player-editable content exercised through the Kanka UI, interrupted/lost-response recovery against the live API, Linux validation, installer signing/VM smoke tests, or public release-artifact verification. Kanka does not document conditional writes; an editing pause remains required during publication.
+
 Version 0.1.4 verified locally on Windows, 2026-09-30: locked restore, Release build with compiler/SonarAnalyzer (zero warnings/errors), formatting verification, and all 135 tests passed. Console-only coverage was 90.73% lines, 82.53% branches, and 95.73% methods. Tests cover `init-env` from subfolders before campaign configuration, existing-file preservation, Git ignore rules, refusal of tracked credentials, literal token round trips, invalid input, cancellation, and diagnostic secrecy. The packaged 0.1.4 tool was exercised in a real terminal with a fake token: hidden input emitted no token text, the saved value matched, and Git ignored `.env`. Smoke artifacts remain under ignored `artifacts/`. No live Kanka API calls were made.
 
 Version 0.1.3 verified locally on Windows, 2026-09-30: locked restore, Release build with compiler/SonarAnalyzer (zero warnings/errors), formatting verification, and all 122 tests passed. Console-only coverage was 91.30% lines, 83.33% branches, and 96.60% methods, passing the 80% line gate. The 0.1.3 tool package was built and installed under ignored `artifacts/tools`; its help command passed a smoke test. New tests cover persistent token parsing, source/name precedence, blank and malformed credentials, root resolution from subfolders, offline independence, ignore rules, preservation of existing files, and removal of both token variables from Git subprocesses. Temporary test repositories now live under ignored `artifacts/tests`. No live Kanka API calls were made.
