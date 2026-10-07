@@ -209,15 +209,5 @@ public sealed class GitRepository(string root)
         ["GIT_COMMITTER_EMAIL"] = "kanka-sync@localhost"
     };
 
-    private static string FindGit()
-    {
-        var executable = OperatingSystem.IsWindows() ? "git.exe" : "git";
-        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-        {
-            if (!Path.IsPathFullyQualified(directory)) continue;
-            var candidate = Path.Combine(directory, executable);
-            if (File.Exists(candidate)) return candidate;
-        }
-        throw new SyncException("Git was not found on PATH.");
-    }
+    private static string FindGit() => GitLocator.Find();
 }

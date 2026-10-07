@@ -91,7 +91,13 @@ public static class CommandLine
     private static async Task DispatchAsync(string[] arguments, GitRepository repository, TextWriter output, CancellationToken cancellationToken,
         Func<string?> readToken, Func<GitRepository, GitHubIssuesClient> createGitHub)
     {
-        if (arguments[0] == "init") { Initialize(repository, arguments[2]); return; }
+        if (arguments[0] == "init")
+        {
+            if (!long.TryParse(arguments[2], NumberStyles.None, CultureInfo.InvariantCulture, out var campaignId))
+                throw new SyncException("Campaign ID must be a positive integer.");
+            await CampaignSetup.InitializeAsync(repository, campaignId, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         if (arguments[0] == "init-env")
         {
             await EnvironmentFile.InitializeAsync(repository, output, readToken, cancellationToken).ConfigureAwait(false);
@@ -170,19 +176,6 @@ public static class CommandLine
                 break;
             default: throw new SyncException("Unsupported online command.");
         }
-    }
-
-    private static void Initialize(GitRepository repository, string campaignText)
-    {
-        if (!long.TryParse(campaignText, NumberStyles.None, CultureInfo.InvariantCulture, out var campaign) || campaign <= 0)
-            throw new SyncException("Campaign ID must be a positive integer.");
-        var path = repository.SafePath(".kanka/config.yml");
-        if (File.Exists(path)) throw new SyncException("Configuration already exists.");
-        Directory.CreateDirectory(repository.SafePath(".kanka"));
-        File.WriteAllText(path, new Configuration(campaign, 30).Write());
-        var users = repository.SafePath(".kanka/users.yml");
-        if (!File.Exists(users)) File.WriteAllText(users, "{}\n");
-        File.AppendAllText(repository.SafePath(".gitignore"), "\n.env\n.env.*\n!.env.example\n.kanka/runtime/\n");
     }
 
     private static async Task ImportAsync(GitRepository repository, SyncService service, TextWriter output, CancellationToken cancellationToken)
