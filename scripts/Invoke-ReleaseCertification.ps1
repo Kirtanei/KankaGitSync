@@ -36,7 +36,7 @@ function Invoke-Kanka([string] $Name, [string[]] $Arguments) {
 
 function Require-ZeroPlan([string] $Name) {
     $plan = Invoke-Kanka $Name @('plan')
-    if ($plan -notmatch '(?m)^0 API operations planned\.$') { throw "Expected a zero-operation plan for $Name." }
+    if ($plan -notmatch '(?m)^0 API operations planned\.\r?$') { throw "Expected a zero-operation plan for $Name." }
 }
 
 function Write-Fixture([string] $Identifier, [string] $Category, [string] $Name, [string] $Body, [bool] $Private) {
