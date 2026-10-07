@@ -12,6 +12,8 @@ Do not create `v1.0.0` until every item below passes. Record sanitized evidence 
 
 Run `docs/acceptance.md` against a disposable campaign with an administrator token and a separate player account. Capture tool version, Windows version/architecture, Git version, Kanka/API observations, sanitized request shapes, and pass/fail evidence.
 
+`scripts/Invoke-ReleaseCertification.ps1` is the repeatable owner-side runner. It writes only ignored, sanitized evidence under `artifacts/release-certification/`; use `-RunLive` only with the disposable world and a clean working tree. It creates uniquely prefixed fixtures and removes them through committed tombstones unless `-KeepFixtures` is supplied. The runner does not replace the separate-player or clean-VM gates.
+
 Require zero-write initial import/repeated fetch; owner and player UI edits that block push; managed create/update/delete round trips for entities, tags, properties, posts, relations, privacy, and circular references; preservation of unmanaged fields and permissions; semantic merge and conflict cases; and explicit deletion acknowledgement.
 
 Use an HTTPS proxy to forward one write then discard its response. Verify durable intent, refetch-based recovery, no blind replay, and the documented manual reconciliation flow for both update and lost-create responses.

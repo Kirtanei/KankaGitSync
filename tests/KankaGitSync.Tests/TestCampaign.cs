@@ -9,6 +9,7 @@ internal sealed class TestCampaign : IKankaClient
     public List<(string Path, JsonObject Body, bool Create)> Writes { get; } = [];
     public List<string> Deletes { get; } = [];
     public int? FailWrite { get; set; }
+    public int? FailAfterWrite { get; set; }
     public Action<string>? BeforeGet { get; set; }
     public Action<string>? AfterWrite { get; set; }
     public Action<JsonObject>? CustomizeEntity { get; set; }
@@ -136,6 +137,7 @@ internal sealed class TestCampaign : IKankaClient
         if (create && ReturnIncompleteEntityCreateResponse && !path.StartsWith("entities/", StringComparison.Ordinal))
             result.Remove("entry");
         AfterWrite?.Invoke(path);
+        if (Writes.Count == FailAfterWrite) throw new SyncException("Simulated lost response after the server accepted the write.");
         return Task.FromResult(result);
     }
 

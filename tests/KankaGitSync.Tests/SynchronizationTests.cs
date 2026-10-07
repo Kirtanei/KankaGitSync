@@ -171,6 +171,30 @@ public sealed class SynchronizationCreationTests
 public sealed class SynchronizationRecoveryTests
 {
     [Fact]
+    public async Task LostResponseAfterAcceptedWriteRefetchesAndRequiresExplicitRecoveryAcknowledgement()
+    {
+        using var fixture = new TestRepository();
+        await fixture.InitializeAsync();
+        var snapshot = fixture.Working();
+        snapshot.Resources["maximilian"] = snapshot.Resources["maximilian"] with { Body = "Accepted before response loss." };
+        fixture.Save(snapshot);
+        await fixture.CommitAsync();
+        fixture.Campaign.FailAfterWrite = 1;
+
+        await Assert.ThrowsAsync<SyncException>(() => fixture.Service.PushAsync(false, TextWriter.Null));
+
+        var live = WorldFiles.Read(await fixture.Git.ReadTreeAsync(GitRepository.Live));
+        Assert.Equal("Accepted before response loss.", live.Resources["maximilian"].Body);
+        Assert.Single(fixture.Campaign.Writes);
+        Assert.Throws<SyncException>(fixture.Ledger.RequireSettled);
+
+        await Assert.ThrowsAsync<SyncException>(() => fixture.Service.PushAsync(false, TextWriter.Null));
+        Assert.Single(fixture.Campaign.Writes);
+        fixture.Ledger.AcknowledgeRecovery();
+        fixture.Ledger.RequireSettled();
+    }
+
+    [Fact]
     public async Task PartialFailureRefetchesAndNeverBlindlyReplays()
     {
         using var fixture = new TestRepository();
