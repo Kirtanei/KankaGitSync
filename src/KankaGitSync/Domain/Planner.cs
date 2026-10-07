@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Domain;
 
 public sealed record Operation(Resource Resource, string Action, string[] Fields, bool PrivacyChange);
 

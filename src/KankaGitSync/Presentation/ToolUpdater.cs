@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Presentation;
 
 public sealed record ToolUpdateResult(bool Updated, string Version);
 

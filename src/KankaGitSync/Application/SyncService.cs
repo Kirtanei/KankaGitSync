@@ -1,8 +1,8 @@
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Application;
 
-public sealed class SyncService(GitRepository repository, IKankaClient client, OperationLedger ledger)
+public sealed class SyncService(ISynchronizationRepository repository, IKankaClient client, IOperationJournal ledger)
 {
     public async Task<Snapshot> FetchAsync(TextWriter? output = null, CancellationToken cancellationToken = default)
     {

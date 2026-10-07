@@ -6,6 +6,6 @@ internal static class Program
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new SetupForm());
+        System.Windows.Forms.Application.Run(new SetupForm());
     }
 }

@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Domain;
 
 public sealed class SyncException(string message, Exception? innerException = null) : Exception(message, innerException);
 

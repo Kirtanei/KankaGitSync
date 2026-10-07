@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Git;
 
-public sealed class GitRepository(string root)
+public sealed class GitRepository(string root) : ISynchronizationRepository
 {
     public string Root { get; } = Path.GetFullPath(root);
     public const string Main = "refs/heads/main";

@@ -1,8 +1,8 @@
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Application;
 
-public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
+public sealed class PushExecutor(IKankaClient client, IOperationJournal ledger)
 {
     public async Task ApplyAsync(IReadOnlyList<Operation> operations, Snapshot remote, CancellationToken cancellationToken)
     {

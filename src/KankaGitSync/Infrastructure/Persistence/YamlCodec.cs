@@ -5,7 +5,7 @@ using YamlDotNet.Core.Events;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Persistence;
 
 public static class YamlCodec
 {

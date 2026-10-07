@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Persistence;
 
 public static class WorldFiles
 {
@@ -9,17 +9,7 @@ public static class WorldFiles
         var files = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var mappings = new JsonObject();
         foreach (var pair in snapshot.Mappings)
-        {
-            var mapping = pair.Value;
-            mappings[pair.Key] = new JsonObject
-            {
-                ["entity_id"] = mapping.EntityId,
-                ["child_id"] = mapping.ChildId,
-                ["entity_type"] = mapping.Category,
-                ["kind"] = mapping.Kind,
-                ["owner"] = mapping.Owner
-            };
-        }
+            mappings[pair.Key] = IdMappingDocument.FromMapping(pair.Value).ToJson();
         files[".kanka/ids.yml"] = YamlCodec.Write(mappings);
         files[".kanka/users.yml"] = YamlCodec.Write(snapshot.Users);
         foreach (var resource in snapshot.Resources.Values)
@@ -103,8 +93,7 @@ public static class WorldFiles
             {
                 var value = pair.Value as JsonObject ?? throw new SyncException("Invalid ID mapping.");
                 if (!Canonical.ValidId(pair.Key)) throw new SyncException("Invalid local ID mapping.");
-                snapshot.Mappings[pair.Key] = new Mapping(value.Number("entity_id"), value.Number("child_id"),
-                    value.Text("entity_type"), value.Text("kind"), value["owner"]?.GetValue<string>());
+                snapshot.Mappings[pair.Key] = IdMappingDocument.FromJson(value).ToMapping();
             }
         if (files.TryGetValue(".kanka/users.yml", out var users)) snapshot.Users = YamlCodec.Read(users);
         foreach (var pair in files.Where(pair => pair.Key.StartsWith(".kanka/remote/", StringComparison.Ordinal)))

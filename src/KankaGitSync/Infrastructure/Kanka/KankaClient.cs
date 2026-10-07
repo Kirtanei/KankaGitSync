@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Kanka;
 
 public interface IKankaClient
 {
@@ -43,7 +43,7 @@ public sealed class KankaClient : IKankaClient, IDisposable
     }
 
     public async Task<JsonObject> GetAsync(string path, CancellationToken cancellationToken) =>
-        (await RequestAsync(HttpMethod.Get, path, null, cancellationToken).ConfigureAwait(false))["data"] as JsonObject
+        (await RequestAsync(HttpMethod.Get, path, null, cancellationToken).ConfigureAwait(false)).Data as JsonObject
         ?? throw new SyncException("API returned an invalid object response.");
 
     public async Task<IReadOnlyList<JsonObject>> ListAsync(string path, CancellationToken cancellationToken)
@@ -55,10 +55,10 @@ public sealed class KankaClient : IKankaClient, IDisposable
         {
             if (!visited.Add(next) || visited.Count > 10000) throw new SyncException("Invalid API pagination cycle.");
             var page = await RequestAsync(HttpMethod.Get, next, null, cancellationToken).ConfigureAwait(false);
-            if (page["data"] is not JsonArray items) throw new SyncException("API returned an invalid collection.");
+            if (page.Data is not JsonArray items) throw new SyncException("API returned an invalid collection.");
             foreach (var item in items)
                 result.Add(item as JsonObject ?? throw new SyncException("Invalid API collection item."));
-            next = page["links"]?["next"]?.GetValue<string>();
+            next = page.NextPage;
         }
         return result;
     }
@@ -67,8 +67,8 @@ public sealed class KankaClient : IKankaClient, IDisposable
     {
         if (create && path.EndsWith("/relations", StringComparison.Ordinal))
             return await CreateRelationAsync(path, body, cancellationToken).ConfigureAwait(false);
-        var response = await RequestAsync(create ? HttpMethod.Post : HttpMethod.Patch, path, body, cancellationToken).ConfigureAwait(false);
-        return response["data"] as JsonObject ?? throw new SyncException("API write returned no object; refetch before retrying.");
+        var response = await RequestAsync(create ? HttpMethod.Post : HttpMethod.Patch, path, new KankaWriteRequest(body), cancellationToken).ConfigureAwait(false);
+        return response.Data as JsonObject ?? throw new SyncException("API write returned no object; refetch before retrying.");
     }
 
     public async Task DeleteAsync(string path, CancellationToken cancellationToken)
@@ -87,7 +87,7 @@ public sealed class KankaClient : IKankaClient, IDisposable
         var previous = (await ListAsync(path, cancellationToken).ConfigureAwait(false))
             .Select(value => KankaAdapter.PositiveId(value, "id")).ToHashSet();
         // Kanka returns a collection including existing relations to the same target after creation.
-        await RequestAsync(HttpMethod.Post, path, body, cancellationToken).ConfigureAwait(false);
+        await RequestAsync(HttpMethod.Post, path, new KankaWriteRequest(body), cancellationToken).ConfigureAwait(false);
         var current = await ListAsync(path, cancellationToken).ConfigureAwait(false);
         var candidates = current.Where(value => !previous.Contains(KankaAdapter.PositiveId(value, "id")) &&
             body.All(field => Planner.Equivalent(field.Key, field.Value, value[field.Key]))).ToArray();
@@ -106,18 +106,18 @@ public sealed class KankaClient : IKankaClient, IDisposable
         return address;
     }
 
-    private async Task<JsonObject> RequestAsync(HttpMethod method, string path, JsonObject? body, CancellationToken cancellationToken)
+    private async Task<KankaResponseEnvelope> RequestAsync(HttpMethod method, string path, KankaWriteRequest? requestBody, CancellationToken cancellationToken)
     {
         var address = SafeUri(path);
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await SendWithBackoffAsync(method, address, body, cancellationToken).ConfigureAwait(false);
+            return await SendWithBackoffAsync(method, address, requestBody, cancellationToken).ConfigureAwait(false);
         }
         finally { gate.Release(); }
     }
 
-    private async Task<JsonObject> SendWithBackoffAsync(HttpMethod method, Uri address, JsonObject? body, CancellationToken cancellationToken)
+    private async Task<KankaResponseEnvelope> SendWithBackoffAsync(HttpMethod method, Uri address, KankaWriteRequest? requestBody, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < MaximumAttempts; attempt++)
         {
@@ -126,7 +126,7 @@ public sealed class KankaClient : IKankaClient, IDisposable
             using var request = new HttpRequestMessage(method, address);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            if (body != null) request.Content = JsonContent.Create(body);
+            if (requestBody != null) request.Content = JsonContent.Create(requestBody.ToJson());
             nextRequest = DateTimeOffset.UtcNow + interval;
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -140,7 +140,7 @@ public sealed class KankaClient : IKankaClient, IDisposable
             var parsed = JsonNode.Parse(content, documentOptions: new JsonDocumentOptions { MaxDepth = 64 }) as JsonObject
                 ?? throw new SyncException("Invalid API JSON response.");
             if (ContainsCredential(parsed)) throw new SyncException("Decoded API data unexpectedly contained credentials; refused to persist it.");
-            return parsed;
+            return KankaResponseEnvelope.Parse(parsed);
         }
         throw new SyncException("Kanka rate limit persisted; try again later.");
     }

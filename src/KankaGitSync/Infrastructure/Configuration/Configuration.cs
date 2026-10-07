@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Configuration;
 
 public sealed record Configuration(long CampaignId, int RequestsPerMinute)
 {

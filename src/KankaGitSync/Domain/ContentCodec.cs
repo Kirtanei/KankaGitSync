@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Markdig;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Domain;
 
 public static partial class ContentCodec
 {

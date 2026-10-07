@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Configuration;
 
 public static class TokenPrompt
 {

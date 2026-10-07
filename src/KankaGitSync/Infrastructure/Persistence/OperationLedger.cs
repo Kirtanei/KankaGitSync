@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Persistence;
 
-public sealed class OperationLedger(string path)
+public sealed class OperationLedger(string path) : IOperationJournal
 {
     public void Append(JsonObject entry)
     {
@@ -26,8 +26,7 @@ public sealed class OperationLedger(string path)
         foreach (var entry in Read().Where(entry => entry.Text("phase") == "applied" && entry["mapping"] is JsonObject))
         {
             var mapping = (JsonObject)entry["mapping"]!;
-            snapshot.Mappings[entry.Text("resource")] = new Mapping(mapping.Number("entity_id"), mapping.Number("child_id"),
-                mapping.Text("category"), mapping.Text("kind"), mapping["owner"]?.GetValue<string>());
+            snapshot.Mappings[entry.Text("resource")] = IdMappingDocument.FromJson(mapping).ToMapping();
         }
     }
 

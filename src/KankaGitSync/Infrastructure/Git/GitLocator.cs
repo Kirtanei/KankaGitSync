@@ -1,4 +1,4 @@
-namespace KankaGitSync;
+namespace KankaGitSync.Infrastructure.Git;
 
 public static class GitLocator
 {

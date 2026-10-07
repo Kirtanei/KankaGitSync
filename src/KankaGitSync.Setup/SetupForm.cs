@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using KankaGitSync.Domain;
+using KankaGitSync.Infrastructure.Git;
+using KankaGitSync.Presentation;
 
 namespace KankaGitSync.Setup;
 

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Presentation;
 
 public sealed record SetupRequest(string WorldDirectory, string CampaignText, string Token);
 

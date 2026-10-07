@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace KankaGitSync;
+namespace KankaGitSync.Presentation;
 
 public readonly record struct FetchProgress(int Completed, int Total)
 {
