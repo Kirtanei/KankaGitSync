@@ -88,4 +88,7 @@ jobs:
           Compare the SHA-256 result with `KankaGitSync-<version>-checksums.txt`. GitHub attestations verify build provenance; they do not make an unsigned installer trusted by Windows.
           '@
           $notes | Set-Content artifacts/release/verification-instructions.md
-          gh release create $env:GITHUB_REF_NAME artifacts/release/* --repo $env:GITHUB_REPOSITORY --verify-tag --title "Kanka Git Sync $env:GITHUB_REF_NAME" --notes-file artifacts/release/verification-instructions.md
+          $releaseArguments = @("release", "create", $env:GITHUB_REF_NAME, "artifacts/release/*", "--repo", $env:GITHUB_REPOSITORY, "--verify-tag", "--title", "Kanka Git Sync $env:GITHUB_REF_NAME", "--notes-file", "artifacts/release/verification-instructions.md")
+          if ($env:GITHUB_REF_NAME -match "-rc\.[1-9][0-9]*$") { $releaseArguments += "--prerelease" }
+          & gh @releaseArguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
