@@ -229,6 +229,20 @@ public sealed class SynchronizationRecoveryTests
 public sealed class SynchronizationPublicationTests
 {
     [Fact]
+    public async Task ServerDerivedFieldsOnPublishedResourceDoNotFailUnplannedChangeVerification()
+    {
+        using var fixture = new TestRepository();
+        await fixture.InitializeAsync();
+        var snapshot = fixture.Working();
+        snapshot.Resources["maximilian"] = snapshot.Resources["maximilian"] with { Body = "New history." };
+        fixture.Save(snapshot);
+        await fixture.CommitAsync();
+        fixture.Campaign.AfterWrite = path => fixture.Campaign.Records[path]["server_derived"] = true;
+        await fixture.Service.PushAsync(false, TextWriter.Null);
+        Assert.NotNull(await fixture.Git.ResolveAsync(GitRepository.Verified));
+    }
+
+    [Fact]
     public async Task NewAttachmentsAndTagChangesRoundTrip()
     {
         using var fixture = new TestRepository();

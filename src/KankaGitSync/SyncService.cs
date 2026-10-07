@@ -120,7 +120,7 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         if (applyFailure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(applyFailure).Throw();
         var actual = WorldFiles.Read(await repository.ReadTreeAsync(GitRepository.Live).ConfigureAwait(false));
         Verify(operations, actual);
-        VerifyUnplanned(remote, actual);
+        VerifyUnplanned(remote, actual, operations);
         if (await repository.ResolveAsync(GitRepository.Main).ConfigureAwait(false) != main)
             throw new SyncException("main moved during publication; review before the next push.");
         var live = await repository.ResolveAsync(GitRepository.Live).ConfigureAwait(false) ?? throw new SyncException("Missing verification ref.");
@@ -146,14 +146,17 @@ public sealed class SyncService(GitRepository repository, IKankaClient client, O
         }
     }
 
-    private static void VerifyUnplanned(Snapshot expected, Snapshot actual)
+    private static void VerifyUnplanned(Snapshot expected, Snapshot actual, IReadOnlyList<Operation> operations)
     {
-        if (!expected.Raw.Keys.SequenceEqual(actual.Raw.Keys))
+        var plannedResources = operations.Select(operation => operation.Resource.Id).ToHashSet(StringComparer.Ordinal);
+        var expectedResources = expected.Raw.Keys.Where(identifier => !plannedResources.Contains(identifier)).ToHashSet(StringComparer.Ordinal);
+        var actualResources = actual.Raw.Keys.Where(identifier => !plannedResources.Contains(identifier)).ToHashSet(StringComparer.Ordinal);
+        if (!expectedResources.SetEquals(actualResources))
             throw new SyncException("Remote resources appeared or disappeared during publication; review kanka/live.");
-        foreach (var pair in expected.Raw)
+        foreach (var identifier in expectedResources)
         {
-            var before = StableState(pair.Value);
-            var after = StableState(actual.Raw[pair.Key]);
+            var before = StableState(expected.Raw[identifier]);
+            var after = StableState(actual.Raw[identifier]);
             if (Canonical.Hash(before) != Canonical.Hash(after))
                 throw new SyncException("Unexpected remote change during publication; review kanka/live before another push.");
         }
