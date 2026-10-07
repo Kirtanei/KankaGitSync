@@ -26,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           $packageVersion = dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | Select-Object -Last 1
-          if ($env:GITHUB_REF_NAME -notmatch "^v$([regex]::Escape($packageVersion))(-rc\\.[1-9][0-9]*)?$") { throw "Tag must match the package version or use its rc.N suffix." }
+          if ($env:GITHUB_REF_NAME -notmatch "^v$([regex]::Escape($packageVersion))(-rc\.[1-9][0-9]*)?$") { throw "Tag must match the package version or use its rc.N suffix." }
       - name: Package global tool
         run: dotnet pack src/KankaGitSync -c Release -o artifacts/release
       - name: Publish self-contained applications
