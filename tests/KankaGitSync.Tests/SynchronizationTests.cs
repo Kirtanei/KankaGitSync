@@ -86,6 +86,7 @@ public sealed class SynchronizationTests
         };
         await fixture.Service.PushAsync(false, TextWriter.Null);
         Assert.Single(fixture.Campaign.Writes);
+        Assert.Contains("characters/1?related=1", fixture.Campaign.GetPaths);
     }
 
     internal static Resource NewEntity(string identifier, string body = "History.", bool publish = true) => new(identifier, "entity", null,

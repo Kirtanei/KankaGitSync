@@ -85,7 +85,9 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
 
     private async Task<JsonObject> GuardAsync(Resource resource, string action, Snapshot remote, CancellationToken cancellationToken)
     {
-        var current = await client.GetAsync(KankaAdapter.ResourcePath(remote.Mappings[resource.Id]), cancellationToken).ConfigureAwait(false);
+        var mapping = remote.Mappings[resource.Id];
+        var path = KankaAdapter.ResourcePath(mapping) + (mapping.Kind == "entity" ? "?related=1" : "");
+        var current = await client.GetAsync(path, cancellationToken).ConfigureAwait(false);
         if (action == "complete")
         {
             RequireUnchangedCreatedShell(resource, current);

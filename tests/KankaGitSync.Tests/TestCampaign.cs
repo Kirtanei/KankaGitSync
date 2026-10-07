@@ -5,6 +5,7 @@ namespace KankaGitSync.Tests;
 internal sealed class TestCampaign : IKankaClient
 {
     public Dictionary<string, JsonObject> Records { get; } = new(StringComparer.Ordinal);
+    public List<string> GetPaths { get; } = [];
     public List<(string Path, JsonObject Body, bool Create)> Writes { get; } = [];
     public List<string> Deletes { get; } = [];
     public int? FailWrite { get; set; }
@@ -73,6 +74,7 @@ internal sealed class TestCampaign : IKankaClient
     public Task<JsonObject> GetAsync(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        GetPaths.Add(path);
         var includesRelated = path.Contains("?related=1", StringComparison.Ordinal);
         path = path.Split('?')[0];
         BeforeGet?.Invoke(path);
