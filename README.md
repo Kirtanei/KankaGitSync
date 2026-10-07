@@ -45,3 +45,7 @@ To delete managed Kanka content, create and commit a tombstone with `git kanka d
 Kanka Git Sync is MIT licensed and maintained on a best-effort basis. It supports .NET 10 and Git on Windows and Linux. Report suspected vulnerabilities privately through GitHub Security Advisories; do not include tokens or campaign content in public issues. The current supported surface is documented in the architecture record; do not treat untested Kanka resource types as editable.
 
 The Wiki is the complete manual. Repository-controlled technical records remain available: [architecture and limitations](docs/architecture.md), [security review](docs/security-review.md), [verification](docs/verification.md), [project ruleset](docs/project-ruleset-v0.1.md), and [live acceptance checks](docs/acceptance.md).
+
+## Windows installer
+
+Windows installer builds are currently unsigned tester artifacts, not a public production release. Windows SmartScreen can warn or block them. Download them only from this repository's Actions artifacts and verify the published SHA-256 checksum before running them. The installer includes Kanka Git Sync and opens a guided world setup wizard; it does not require .NET or Git Bash. Git for Windows is required because Git is the synchronization history store. If it is missing, install it from the official Git for Windows site, then return to the wizard. The wizard can select an existing repository or create a world under `Documents\Kanka Worlds`, and stores the Kanka token only in that world's ignored `.env` file.

@@ -1,0 +1,47 @@
+name: Unsigned Windows installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore --locked-mode
+      - run: dotnet build -c Release --no-restore
+      - name: Publish self-contained applications
+        shell: pwsh
+        run: |
+          $publishDirectory = "artifacts/windows/${{ matrix.runtime }}"
+          dotnet publish src/KankaGitSync/KankaGitSync.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $publishDirectory
+          Move-Item "$publishDirectory/KankaGitSync.exe" "$publishDirectory/git-kanka.exe"
+          dotnet publish src/KankaGitSync.Setup/KankaGitSync.Setup.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $publishDirectory
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+      - name: Build installer
+        shell: pwsh
+        env:
+          KANKA_VERSION: ${{ github.ref_name }}
+          KANKA_ARCHITECTURE: ${{ matrix.runtime == 'win-x64' && 'x64' || 'arm64' }}
+          KANKA_PUBLISH_DIRECTORY: ${{ github.workspace }}\artifacts\windows\${{ matrix.runtime }}
+        run: |
+          $env:KANKA_VERSION = $env:KANKA_VERSION.TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\KankaGitSync.iss
+      - name: Create checksum
+        shell: pwsh
+        run: Get-FileHash artifacts/installers/KankaGitSync-Setup-*.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)" } | Set-Content artifacts/installers/KankaGitSync-Setup-${{ matrix.runtime }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.runtime }}
+          path: artifacts/installers/
