@@ -4,6 +4,19 @@ namespace KankaGitSync.Tests;
 
 public sealed class AdapterTests
 {
+    [Fact]
+    public async Task FetchIgnoresVolatileRelationshipSyncMarkers()
+    {
+        var client = new TestCampaign();
+        client.Records["characters/1"]["organisations"] = new JsonObject { ["data"] = new JsonArray(), ["sync"] = "first" };
+        var adapter = new KankaAdapter(client);
+        var initial = await adapter.FetchAsync(new Snapshot(), default);
+        client.Records["characters/1"]["organisations"]!["sync"] = "second";
+        var repeated = await adapter.FetchAsync(initial, default);
+        Assert.Equal(Canonical.Json(initial.Raw["maximilian"]), Canonical.Json(repeated.Raw["maximilian"]));
+        Assert.Null(repeated.Raw["maximilian"]["organisations"]!["sync"]);
+    }
+
     [Theory]
     [InlineData("true", "true")]
     [InlineData("false", "false")]

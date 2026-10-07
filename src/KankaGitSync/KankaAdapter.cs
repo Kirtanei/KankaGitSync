@@ -52,7 +52,7 @@ public sealed class KankaAdapter(IKankaClient client)
         var mapping = new Mapping(raw.Number("entity_id"), childId, category, "entity", null);
         RemoveEntity(snapshot, endpoint, childId);
         snapshot.Mappings[identifier] = mapping;
-        snapshot.Raw[identifier] = raw.Copy();
+        snapshot.Raw[identifier] = SnapshotRaw(raw);
         snapshot.Resources[identifier] = Import(identifier, mapping, raw, snapshot.Mappings);
         foreach (var kind in new[] { "property", "post", "relation" })
             foreach (var child in RelatedChildren(raw, AttachmentEndpoint(kind)))
@@ -81,7 +81,7 @@ public sealed class KankaAdapter(IKankaClient client)
         var category = EntityCategory(entity);
         if (!Categories.Endpoints.ContainsKey(category))
         {
-            snapshot.Raw["unmanaged-" + entityId] = entity.Copy();
+            snapshot.Raw["unmanaged-" + entityId] = SnapshotRaw(entity);
             return;
         }
         var existing = snapshot.Mappings.SingleOrDefault(pair => pair.Value.Kind == "entity" && pair.Value.EntityId == entityId);
@@ -99,7 +99,7 @@ public sealed class KankaAdapter(IKankaClient client)
         await completeRequest().ConfigureAwait(false);
         if (PositiveId(raw, "entity_id") != mapping.EntityId || PositiveId(raw, "id") != mapping.ChildId)
             throw new SyncException("API entity identity mismatch.");
-        snapshot.Raw[pair.Key] = raw.Copy();
+        snapshot.Raw[pair.Key] = SnapshotRaw(raw);
         snapshot.Resources[pair.Key] = Import(pair.Key, mapping, raw, snapshot.Mappings);
         foreach (var kind in new[] { "property", "post", "relation" })
             foreach (var child in RelatedChildren(raw, AttachmentEndpoint(kind)))
@@ -126,7 +126,7 @@ public sealed class KankaAdapter(IKankaClient client)
         var identifier = existing.Key ?? Canonical.NewId(owner + "-" + raw.Text("name", kind), snapshot.Mappings.Keys);
         var mapping = new Mapping(parent.EntityId, childId, parent.Category, kind, owner);
         snapshot.Mappings[identifier] = mapping;
-        snapshot.Raw[identifier] = raw.Copy();
+        snapshot.Raw[identifier] = SnapshotRaw(raw);
         snapshot.Resources[identifier] = Import(identifier, mapping, raw, snapshot.Mappings);
     }
 
@@ -152,6 +152,27 @@ public sealed class KankaAdapter(IKankaClient client)
     {
         var identifier = value.Number(key);
         return identifier > 0 ? identifier : throw new SyncException("API resource has no valid identity.");
+    }
+
+    internal static JsonObject SnapshotRaw(JsonObject raw)
+    {
+        var snapshot = raw.Copy();
+        RemoveRelationshipSyncMarkers(snapshot);
+        return snapshot;
+    }
+
+    private static void RemoveRelationshipSyncMarkers(JsonNode? value)
+    {
+        switch (value)
+        {
+            case JsonObject fields:
+                foreach (var child in fields.Select(pair => pair.Value).ToArray()) RemoveRelationshipSyncMarkers(child);
+                if (fields.ContainsKey("data")) fields.Remove("sync");
+                break;
+            case JsonArray items:
+                foreach (var child in items) RemoveRelationshipSyncMarkers(child);
+                break;
+        }
     }
 
     public static Resource Import(string identifier, Mapping mapping, JsonObject raw, IReadOnlyDictionary<string, Mapping> mappings)

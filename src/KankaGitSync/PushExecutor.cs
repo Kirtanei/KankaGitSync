@@ -52,7 +52,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
                 ["owner"] = mapping.Owner
             }
         });
-        remote.Raw[resource.Id] = response.Copy();
+        remote.Raw[resource.Id] = KankaAdapter.SnapshotRaw(response);
     }
 
     private async Task DeleteAsync(Operation operation, Snapshot remote, CancellationToken cancellationToken)
