@@ -19,7 +19,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
             return;
         }
         var create = operation.Action == "create";
-        var before = create ? null : await GuardAsync(resource.Id, remote, cancellationToken).ConfigureAwait(false);
+        var before = create ? null : await GuardAsync(resource, operation.Action, remote, cancellationToken).ConfigureAwait(false);
         var payload = BuildPayload(operation, remote.Mappings);
         var identifier = Guid.NewGuid().ToString("N");
         ledger.Append(new JsonObject
@@ -58,7 +58,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
     private async Task DeleteAsync(Operation operation, Snapshot remote, CancellationToken cancellationToken)
     {
         var resource = operation.Resource;
-        var before = await GuardAsync(resource.Id, remote, cancellationToken).ConfigureAwait(false);
+        var before = await GuardAsync(resource, "delete", remote, cancellationToken).ConfigureAwait(false);
         var identifier = Guid.NewGuid().ToString("N");
         var path = KankaAdapter.ResourcePath(remote.Mappings[resource.Id]);
         ledger.Append(new JsonObject
@@ -83,12 +83,27 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
         remote.Raw.Remove(resource.Id);
     }
 
-    private async Task<JsonObject> GuardAsync(string identifier, Snapshot remote, CancellationToken cancellationToken)
+    private async Task<JsonObject> GuardAsync(Resource resource, string action, Snapshot remote, CancellationToken cancellationToken)
     {
-        var current = await client.GetAsync(KankaAdapter.ResourcePath(remote.Mappings[identifier]), cancellationToken).ConfigureAwait(false);
-        if (!remote.Raw.TryGetValue(identifier, out var expected) || Canonical.Hash(ConcurrencyState(current)) != Canonical.Hash(ConcurrencyState(expected)))
+        var current = await client.GetAsync(KankaAdapter.ResourcePath(remote.Mappings[resource.Id]), cancellationToken).ConfigureAwait(false);
+        if (action == "complete")
+        {
+            RequireUnchangedCreatedShell(resource, current);
+            return current;
+        }
+        if (!remote.Raw.TryGetValue(resource.Id, out var expected) || Canonical.Hash(ConcurrencyState(current)) != Canonical.Hash(ConcurrencyState(expected)))
             throw new SyncException("Kanka changed after planning. Push stopped; refetch and review the remote edit.");
         return current;
+    }
+
+    private static void RequireUnchangedCreatedShell(Resource resource, JsonObject current)
+    {
+        // The create endpoint accepts only these shell fields; GET can supply server defaults for the remaining fields.
+        var shellIsUnchanged = current.Text("name") == resource.Name &&
+            current.Text("type") == resource.Metadata.Text("type") &&
+            current.Flag("is_private", true);
+        if (!shellIsUnchanged)
+            throw new SyncException("Kanka changed after planning. Push stopped; refetch and review the remote edit.");
     }
 
     public static JsonObject ConcurrencyState(JsonObject raw)

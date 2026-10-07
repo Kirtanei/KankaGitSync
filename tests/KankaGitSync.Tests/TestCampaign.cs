@@ -11,6 +11,7 @@ internal sealed class TestCampaign : IKankaClient
     public Action<string>? BeforeGet { get; set; }
     public Action<string>? AfterWrite { get; set; }
     public Action<JsonObject>? CustomizeEntity { get; set; }
+    public bool ReturnIncompleteEntityCreateResponse { get; set; }
     private long nextIdentifier = 100;
 
     public TestCampaign()
@@ -130,6 +131,8 @@ internal sealed class TestCampaign : IKankaClient
         foreach (var pair in body) Records[path][pair.Key] = pair.Value?.DeepClone();
         Records[path]["updated_by"] = 9;
         var result = Records[path].Copy();
+        if (create && ReturnIncompleteEntityCreateResponse && !path.StartsWith("entities/", StringComparison.Ordinal))
+            result.Remove("entry");
         AfterWrite?.Invoke(path);
         return Task.FromResult(result);
     }

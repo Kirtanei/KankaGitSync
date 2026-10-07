@@ -103,6 +103,7 @@ public sealed class SynchronizationCreationTests
     {
         using var fixture = new TestRepository();
         await fixture.InitializeAsync();
+        fixture.Campaign.ReturnIncompleteEntityCreateResponse = true;
         var snapshot = fixture.Working();
         var first = SynchronizationTests.NewEntity("chapel", "[[keeper]]");
         var second = SynchronizationTests.NewEntity("keeper", "[[chapel]]");
