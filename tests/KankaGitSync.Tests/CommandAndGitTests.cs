@@ -30,7 +30,7 @@ public sealed class CommandAndGitTests
     }
 
     [Fact]
-    public async Task InitValidatesInputAndWritesOnlyNonsecretConfiguration()
+    public async Task InitValidatesInputAndSafelyReusesMatchingConfiguration()
     {
         using var fixture = new TestRepository();
         await fixture.InitializeAsync(false);
@@ -41,7 +41,10 @@ public sealed class CommandAndGitTests
         Assert.Equal(0, await CommandLine.RunAsync(["init", "--campaign", "123"], fixture.Git.Root, output, errors));
         Assert.Equal(new Configuration(123, 30), Configuration.Read(File.ReadAllText(fixture.Git.SafePath(".kanka/config.yml"))));
         Assert.Contains(".env", File.ReadAllText(fixture.Git.SafePath(".gitignore")));
-        Assert.Equal(1, await CommandLine.RunAsync(["init", "--campaign", "123"], fixture.Git.Root, output, errors));
+        Assert.Equal(0, await CommandLine.RunAsync(["init", "--campaign", "123"], fixture.Git.Root, output, errors));
+        Assert.Equal(1, await CommandLine.RunAsync(["init", "--campaign", "456"], fixture.Git.Root, output, errors));
+        Assert.Equal(new Configuration(123, 30), Configuration.Read(File.ReadAllText(fixture.Git.SafePath(".kanka/config.yml"))));
+        Assert.Equal(1, File.ReadAllLines(fixture.Git.SafePath(".gitignore")).Count(line => line == ".env"));
         Assert.Equal(0, await CommandLine.RunAsync(["doctor"], fixture.Git.Root, output, errors));
         Assert.Equal(0, await CommandLine.RunAsync(["validate"], fixture.Git.Root, output, errors));
         Assert.Equal(1, await CommandLine.RunAsync(["status"], fixture.Git.Root, output, errors));

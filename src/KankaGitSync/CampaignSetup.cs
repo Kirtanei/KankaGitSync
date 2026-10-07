@@ -7,6 +7,8 @@ public sealed record SetupRequest(string WorldDirectory, string CampaignText, st
 
 public static class CampaignSetup
 {
+    private static readonly string[] gitIgnoreRules = [".env", ".env.*", "!.env.example", ".kanka/runtime/"];
+
     public static string DefaultWorldDirectory() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Kanka Worlds", "Kanka World");
 
@@ -26,12 +28,35 @@ public static class CampaignSetup
     {
         if (campaignId <= 0) throw new SyncException("Campaign ID must be a positive integer.");
         var configurationPath = repository.SafePath(".kanka/config.yml");
-        if (File.Exists(configurationPath)) throw new SyncException("Configuration already exists.");
-        Directory.CreateDirectory(repository.SafePath(".kanka"));
-        await File.WriteAllTextAsync(configurationPath, new Configuration(campaignId, 30).Write(), cancellationToken).ConfigureAwait(false);
+        await EnsureConfigurationAsync(configurationPath, campaignId, cancellationToken).ConfigureAwait(false);
         var usersPath = repository.SafePath(".kanka/users.yml");
         if (!File.Exists(usersPath)) await File.WriteAllTextAsync(usersPath, "{}\n", cancellationToken).ConfigureAwait(false);
-        await File.AppendAllTextAsync(repository.SafePath(".gitignore"), "\n.env\n.env.*\n!.env.example\n.kanka/runtime/\n", cancellationToken).ConfigureAwait(false);
+        await EnsureGitIgnoreRulesAsync(repository.SafePath(".gitignore"), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureConfigurationAsync(string configurationPath, long campaignId, CancellationToken cancellationToken)
+    {
+        if (File.Exists(configurationPath))
+        {
+            var existing = Configuration.Read(await File.ReadAllTextAsync(configurationPath, cancellationToken).ConfigureAwait(false));
+            if (existing.CampaignId != campaignId)
+                throw new SyncException($"This world is already configured for campaign {existing.CampaignId}.");
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(configurationPath) ?? throw new SyncException("Invalid configuration path."));
+        await File.WriteAllTextAsync(configurationPath, new Configuration(campaignId, 30).Write(), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureGitIgnoreRulesAsync(string gitIgnorePath, CancellationToken cancellationToken)
+    {
+        var existingRules = File.Exists(gitIgnorePath)
+            ? await File.ReadAllLinesAsync(gitIgnorePath, cancellationToken).ConfigureAwait(false)
+            : [];
+        var missingRules = gitIgnoreRules.Where(rule => !existingRules.Contains(rule, StringComparer.Ordinal)).ToArray();
+        if (missingRules.Length == 0) return;
+        var prefix = existingRules.Length == 0 ? "" : "\n";
+        await File.AppendAllTextAsync(gitIgnorePath, prefix + string.Join('\n', missingRules) + "\n", cancellationToken).ConfigureAwait(false);
     }
 
     private static string ValidateWorldDirectory(string value)

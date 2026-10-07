@@ -16,6 +16,9 @@ internal sealed class SetupForm : Form
         Text = "Kanka Git Sync setup";
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        AutoScaleMode = AutoScaleMode.Dpi;
         MaximizeBox = false;
         MinimizeBox = false;
         worldDirectory.Text = CampaignSetup.DefaultWorldDirectory();
@@ -29,7 +32,7 @@ internal sealed class SetupForm : Form
 
     private Control CreateLayout(Button browseButton)
     {
-        var layout = new TableLayoutPanel { AutoSize = true, Padding = new Padding(16), ColumnCount = 3, RowCount = 6 };
+        var layout = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16), ColumnCount = 3, RowCount = 6 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -93,8 +96,7 @@ internal sealed class SetupForm : Form
         SetBusy(true);
         try
         {
-            var executable = Path.Combine(AppContext.BaseDirectory, "git-kanka.exe");
-            if (!File.Exists(executable)) throw new SyncException("Git Kanka is not installed beside the setup wizard.");
+            var executable = FindSynchronizerExecutable();
             var start = new ProcessStartInfo(executable) { WorkingDirectory = preparedWorldDirectory, UseShellExecute = false, CreateNoWindow = true };
             start.ArgumentList.Add("import");
             using var process = Process.Start(start) ?? throw new SyncException("Could not start Git Kanka import.");
@@ -108,6 +110,17 @@ internal sealed class SetupForm : Form
             MessageBox.Show(this, exception.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { SetBusy(false); }
+    }
+
+    private static string FindSynchronizerExecutable()
+    {
+        foreach (var fileName in new[] { "git-kanka.exe", "KankaGitSync.exe" })
+        {
+            var executable = Path.Combine(AppContext.BaseDirectory, fileName);
+            if (File.Exists(executable)) return executable;
+        }
+
+        throw new SyncException("Git Kanka is not installed beside the setup wizard.");
     }
 
     private void SetBusy(bool busy)
