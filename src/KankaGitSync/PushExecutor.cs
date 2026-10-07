@@ -111,7 +111,7 @@ public sealed class PushExecutor(IKankaClient client, OperationLedger ledger)
         var result = KankaAdapter.SnapshotRaw(raw);
         // Related collections have their own guards; parsed HTML and image URLs are generated views.
         foreach (var field in new[] { "attributes", "posts", "relations", "entity_events", "entity_files", "entity_abilities", "entity_links",
-                     "entry_parsed", "image_full", "image_thumb", "urls" }) result.Remove(field);
+                     "entry_parsed", "image_full", "image_thumb", "urls", "updated_at", "updated_by" }) result.Remove(field);
         return result;
     }
 

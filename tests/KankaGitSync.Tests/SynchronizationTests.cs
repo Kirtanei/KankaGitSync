@@ -67,6 +67,8 @@ public sealed class SynchronizationTests
     {
         using var fixture = new TestRepository();
         fixture.Campaign.Records["characters/1"]["organisations"] = new JsonObject { ["data"] = new JsonArray(), ["sync"] = "before" };
+        fixture.Campaign.Records["characters/1"]["updated_at"] = "before";
+        fixture.Campaign.Records["characters/1"]["updated_by"] = 1;
         await fixture.InitializeAsync();
         var snapshot = fixture.Working();
         snapshot.Resources["maximilian"] = snapshot.Resources["maximilian"] with { Body = "Updated history." };
@@ -76,7 +78,11 @@ public sealed class SynchronizationTests
         fixture.Campaign.BeforeGet = path =>
         {
             if (path == "characters/1" && ++characterReads == 2)
+            {
                 fixture.Campaign.Records[path]["organisations"]!["sync"] = "after";
+                fixture.Campaign.Records[path]["updated_at"] = "after";
+                fixture.Campaign.Records[path]["updated_by"] = 2;
+            }
         };
         await fixture.Service.PushAsync(false, TextWriter.Null);
         Assert.Single(fixture.Campaign.Writes);
