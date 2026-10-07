@@ -16,19 +16,19 @@ Creation records numeric IDs before subsequent operations. Circular references w
 
 Kanka's relation creation endpoint returns a collection that can include older relations to the same target. The HTTP adapter records existing relation IDs before creating, then enumerates the resulting collection and requires exactly one new matching resource. An ambiguous result becomes an unresolved ledger intention, never a guessed identity. This behavior was checked against the upstream [relation controller](https://github.com/owlchester/kanka/blob/develop/app/Http/Controllers/Api/v1/EntityRelationApiController.php).
 
-## Support declaration
+## 1.0 support declaration
 
 The ruleset reserves **FULL** for the entire CRUD lifecycle with proven round trips. The core adapters have tested local fixtures for entity common fields, tags, properties, posts, and relations, including explicitly acknowledged deletion. Live-campaign round-trip certification remains required before any resource is claimed FULL for production use. Treat the current support table as a documented interim extension to the three-level support model, not a claim of full protocol coverage.
 
-| Resource surface | v0.1 behavior |
+| Resource surface | 1.0 behavior |
 | --- | --- |
-| Entity name, type, body, privacy, tags | Import, diff, create, update |
-| Character title, age, sex, pronouns | Import, diff, create, update |
-| Properties, posts, relations | Independent import, diff, create, update |
+| Entity name, type, body, privacy, tags | FULL after release certification: import, diff, create, update |
+| Character title, age, sex, pronouns | FULL after release certification: import, diff, create, update |
+| Properties, posts, relations | FULL after release certification: independent import, diff, create, update |
 | Other type-specific fields and related metadata | READ_ONLY; preserved in API snapshots |
 | Custom/unknown entity modules | UNMANAGED; generic record observed |
 | Permissions | UNMANAGED; never mutated |
-| Explicit tombstones for entities, properties, posts, relations | DELETE requires `--allow-delete`; live certification pending |
+| Explicit tombstones for entities, properties, posts, relations | FULL after release certification; DELETE requires `--allow-delete` |
 | Binary assets and external files | UNMANAGED; metadata only, no downloads |
 
 Unknown property types, unknown visibility values, inaccessible relation targets, and unmappable tags stop import rather than silently discard data. Such a campaign needs adapter extension or visibility correction before synchronization. A full campaign export may therefore require more adapter coverage than the representative MVP fixtures.
@@ -41,7 +41,7 @@ Unknown property types, unknown visibility values, inaccessible relation targets
 - Preserved raw HTML is not rendered locally or sanitized by this CLI. Preview only in a renderer with appropriate HTML security controls. Imported unknown mention syntax may retain Kanka-specific references to prevent data loss.
 - Nested metadata outside the supported schema is rejected for authored files. Detailed type-specific references and attachment options are preserved read-only until covered by a tested adapter.
 - New entities stay private if a push fails before completion. Manual reconciliation is required for an API create whose response was lost; automated name matching would risk confusing unrelated resources.
-- No production campaign or credentials were supplied during development. Offline fixture success is not the ruleset's full production-readiness certification.
+- No release is certified until the disposable-campaign, lost-response, and clean-VM gates in `docs/release-certification.md` have passed. Offline fixtures alone are not production-readiness certification.
 
 ## API references consulted
 

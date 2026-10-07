@@ -7,10 +7,12 @@ on:
 
 permissions:
   contents: write
+  attestations: write
+  id-token: write
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -21,15 +23,69 @@ jobs:
       - run: dotnet build -c Release --no-restore
       - run: dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=teamcity -p:Threshold=80 -p:ThresholdType=line -p:ThresholdStat=total
       - name: Verify version tag
-        shell: bash
+        shell: pwsh
         run: |
-          package_version="$(dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | tail -n 1)"
-          test "v${package_version}" = "${GITHUB_REF_NAME}"
-      - run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-      - name: Create package checksum
-        shell: bash
-        run: sha256sum artifacts/packages/KankaGitSync.*.nupkg > artifacts/packages/KankaGitSync.sha256
+          $packageVersion = dotnet msbuild src/KankaGitSync/KankaGitSync.csproj -getProperty:PackageVersion -nologo | Select-Object -Last 1
+          if ("v$packageVersion" -ne $env:GITHUB_REF_NAME) { throw "Tag and package version differ." }
+      - name: Package global tool
+        run: dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/release
+      - name: Publish self-contained applications
+        shell: pwsh
+        run: |
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $publishDirectory = "artifacts/windows/$runtime"
+            dotnet publish src/KankaGitSync/KankaGitSync.csproj -c Release -r $runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $publishDirectory
+            Move-Item "$publishDirectory/KankaGitSync.exe" "$publishDirectory/git-kanka.exe"
+            dotnet publish src/KankaGitSync.Setup/KankaGitSync.Setup.csproj -c Release -r $runtime --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $publishDirectory
+          }
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress --yes
+      - name: Build installers
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          foreach ($runtime in @('win-x64', 'win-arm64')) {
+            $architecture = if ($runtime -eq 'win-x64') { 'x64' } else { 'arm64' }
+            $env:KANKA_VERSION = $version
+            $env:KANKA_ARCHITECTURE = $architecture
+            $env:KANKA_PUBLISH_DIRECTORY = "$env:GITHUB_WORKSPACE\artifacts\windows\$runtime"
+            & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\KankaGitSync.iss
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Move-Item artifacts/installers/*.exe artifacts/release/
+      - name: Create release checksum manifest
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/release -File | Sort-Object Name | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path | Split-Path -Leaf)" } | Set-Content "artifacts/release/KankaGitSync-$($env:GITHUB_REF_NAME.TrimStart('v'))-checksums.txt"
+      - id: attest-installers
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release/*-Setup.exe
+      - id: attest-checksums
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release/*-checksums.txt
+      - name: Add attestation bundles to release assets
+        shell: pwsh
+        run: |
+          Copy-Item '${{ steps.attest-installers.outputs.bundle-path }}' artifacts/release/KankaGitSync-installers.attestation.jsonl
+          Copy-Item '${{ steps.attest-checksums.outputs.bundle-path }}' artifacts/release/KankaGitSync-checksums.attestation.jsonl
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" artifacts/packages/KankaGitSync.*.nupkg artifacts/packages/KankaGitSync.sha256 --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes
+        shell: pwsh
+        run: |
+          $notes = @'
+          ## Verify before installing
+
+          This is an unsigned Windows installer. SmartScreen or enterprise policy can block it.
+
+          ```powershell
+          Get-FileHash .\KankaGitSync-<version>-win-<architecture>-Setup.exe -Algorithm SHA256
+          gh attestation verify .\KankaGitSync-<version>-win-<architecture>-Setup.exe --repo Kirtanei/KankaGitSync
+          ```
+
+          Compare the SHA-256 result with `KankaGitSync-<version>-checksums.txt`. GitHub attestations verify build provenance; they do not make an unsigned installer trusted by Windows.
+          '@
+          $notes | Set-Content artifacts/release/verification-instructions.md
+          gh release create $env:GITHUB_REF_NAME artifacts/release/* --repo $env:GITHUB_REPOSITORY --verify-tag --title "Kanka Git Sync $env:GITHUB_REF_NAME" --notes-file artifacts/release/verification-instructions.md

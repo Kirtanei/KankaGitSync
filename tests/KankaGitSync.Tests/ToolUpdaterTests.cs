@@ -152,6 +152,22 @@ public sealed class ToolUpdaterTests
     }
 
     [Fact]
+    public async Task InstallerDeploymentRequiresManualUpdateWithoutCreatingUpdater()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.Equal(0, await CommandLine.RunAsync(["update"], Path.GetTempPath(), output, error,
+            createUpdater: () => throw new InvalidOperationException("Installer update must not contact GitHub."), installerDeployment: true));
+
+        var text = output.ToString();
+        Assert.Contains("manual upgrade", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("releases/latest", text, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", text, StringComparison.Ordinal);
+        Assert.Contains("gh attestation verify", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MissingMachineTokenFailsWithoutReadingRepository()
     {
         var exception = Assert.Throws<SyncException>(() => TokenConfiguration.ReadGitHubEnvironment(_ => null));

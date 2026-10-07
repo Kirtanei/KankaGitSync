@@ -8,7 +8,7 @@ namespace KankaGitSync.Presentation;
 public static class CommandLine
 {
     private const string Help = """
-        Kanka Git Sync 0.1 — Git is permanent history; Kanka edits require review.
+        Kanka Git Sync 1.0 - Git is permanent history; Kanka edits require review.
         git kanka init --campaign <positive-id>
         git kanka init-env
         git kanka import | fetch [--full] | status | diff | pull | validate | plan | update
@@ -20,12 +20,12 @@ public static class CommandLine
         fetch reads the GitHub webhook queue; fetch --full scans Kanka. pull merges clean queued changes and closes their queue issues.
         delete records a tombstone. Commit it, review the plan, then use --allow-delete to execute it.
         KANKA_API_TOKEN or KANKA_TOKEN is read from the environment or world-root .env. Use a disposable campaign first.
-        update checks the latest public GitHub Release.
+        update checks the latest public GitHub Release for global-tool installs. Installer installs require a manual upgrade.
         """;
 
     public static async Task<int> RunAsync(string[] arguments, string directory, TextWriter output, TextWriter error,
         CancellationToken cancellationToken = default, Func<string?>? readToken = null, Func<ToolUpdater>? createUpdater = null,
-        Func<GitRepository, GitHubIssuesClient>? createGitHub = null)
+        Func<GitRepository, GitHubIssuesClient>? createGitHub = null, bool? installerDeployment = null)
     {
         try
         {
@@ -37,7 +37,7 @@ public static class CommandLine
             CommandRequest.Parse(arguments);
             if (arguments[0] == "update")
             {
-                await UpdateAsync(output, cancellationToken, createUpdater).ConfigureAwait(false);
+                await UpdateAsync(output, cancellationToken, createUpdater, installerDeployment ?? InstallerDeployment.IsInstalled()).ConfigureAwait(false);
                 return 0;
             }
             var repository = new GitRepository(directory);
@@ -101,8 +101,16 @@ public static class CommandLine
         await RunOnlineAsync(arguments, repository, service, ledger, output, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task UpdateAsync(TextWriter output, CancellationToken cancellationToken, Func<ToolUpdater>? createUpdater)
+    private static async Task UpdateAsync(TextWriter output, CancellationToken cancellationToken, Func<ToolUpdater>? createUpdater, bool installerDeployment)
     {
+        if (installerDeployment)
+        {
+            await output.WriteLineAsync("This installer deployment requires a manual upgrade.").ConfigureAwait(false);
+            await output.WriteLineAsync("Download: https://github.com/Kirtanei/KankaGitSync/releases/latest").ConfigureAwait(false);
+            await output.WriteLineAsync("Verify checksum: Get-FileHash .\\KankaGitSync-<version>-win-<architecture>-Setup.exe -Algorithm SHA256").ConfigureAwait(false);
+            await output.WriteLineAsync("Verify provenance: gh attestation verify .\\KankaGitSync-<version>-win-<architecture>-Setup.exe --repo Kirtanei/KankaGitSync").ConfigureAwait(false);
+            return;
+        }
         using var updater = createUpdater?.Invoke() ?? new ToolUpdater(ToolUpdater.CurrentVersion());
         var result = await updater.UpdateAsync(cancellationToken).ConfigureAwait(false);
         await output.WriteLineAsync(result.Updated

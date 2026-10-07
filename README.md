@@ -1,51 +1,62 @@
 # Kanka Git Sync
 
-Kanka Git Sync records a Kanka campaign in a Git repository while leaving Kanka available to players and the GM. Git is the accepted history; `kanka/live` is the last observed campaign state. **v0.1 is not certified for a production campaign.** Use a disposable campaign and complete the [acceptance procedure](docs/acceptance.md) first.
+Kanka Git Sync 1.0 records a Kanka campaign in a Git repository while leaving Kanka available to players and the GM. Git is the accepted history; `kanka/live` is the last observed campaign state.
 
-The full manual is in the [GitHub Wiki](https://github.com/Kirtanei/KankaGitSync/wiki): [installation](https://github.com/Kirtanei/KankaGitSync/wiki/Installation), [daily workflow](https://github.com/Kirtanei/KankaGitSync/wiki/Daily-Workflow), [command reference](https://github.com/Kirtanei/KankaGitSync/wiki/Command-Reference), [architecture](https://github.com/Kirtanei/KankaGitSync/wiki/Architecture-Overview), and [safety/recovery](https://github.com/Kirtanei/KankaGitSync/wiki/Troubleshooting-and-Recovery).
+## Supported product
 
-> **AI transparency:** This project and its documentation are developed with AI assistance. Human review remains required for code, configuration, operational decisions, and campaign changes. Verify operational claims against the current release and `git kanka help`.
+The supported runtime is Windows 10 22H2 or later with Git for Windows 2.44 or later on `PATH`. Download the self-contained `win-x64` or `win-arm64` installer from the [GitHub Releases page](https://github.com/Kirtanei/KankaGitSync/releases). The installer does not bundle Git or require the .NET SDK.
 
-## Quick start
+Installers are unsigned. Windows SmartScreen or enterprise policy can block them. Before execution, compare the installer SHA-256 with the release checksum manifest and verify GitHub build provenance:
 
-Prerequisites: .NET 10 SDK and Git on PATH.
-
-```sh
-dotnet restore --locked-mode
-dotnet build -c Release --no-restore
-dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=teamcity -p:Threshold=80 -p:ThresholdType=line -p:ThresholdStat=total
-dotnet pack src/KankaGitSync -c Release --no-build -o artifacts/packages
-dotnet tool install --global --add-source ./artifacts/packages KankaGitSync
-git kanka help
+```powershell
+Get-FileHash .\KankaGitSync-<version>-win-<architecture>-Setup.exe -Algorithm SHA256
+gh attestation verify .\KankaGitSync-<version>-win-<architecture>-Setup.exe --repo Kirtanei/KankaGitSync
 ```
 
-Coverage statistics go to the console. Compiler and SonarAnalyzer warnings fail the build. `dotnet format --no-restore --verify-no-changes` checks formatting. Package dependencies are locked. The CI workflow checks Windows and Linux.
+GitHub attestations prove build provenance; they do not make an unsigned installer trusted by Windows. Installer deployments upgrade manually by downloading and verifying a new installer. `git kanka update` remains available for the public .NET global-tool installation path.
 
-Use `git kanka help` or `git-kanka --help`; Git intercepts `git kanka --help` as a request for an installed manual page.
+The latest stable 1.x release is supported. Report suspected vulnerabilities privately through GitHub Security Advisories; never include tokens or campaign content in public issues.
 
-Update an installed tool from the latest stable public GitHub Release:
+## Certified synchronization core
 
-```sh
-git kanka update
-```
+| Surface | 1.0 support |
+| --- | --- |
+| Managed entity fields, tags, properties, posts, relations | FULL, subject to release certification |
+| Explicit committed tombstones | DELETE only with `--allow-delete`, subject to release certification |
+| Permissions, binary/media assets, detailed module fields | READ_ONLY or UNMANAGED; never changed by push |
+| Unknown modules and fields | Observed/preserved; never write-managed |
 
-No GitHub token is required to use `update`. Then use this normal workflow from a world repository:
+Use a campaign administrator token with visibility of every managed resource. Coordinate an editing pause while publishing: Kanka does not document conditional writes, so the final reread/write race cannot be eliminated. Kanka writes affect live data. Permissions remain unmanaged.
+
+## Daily workflow
 
 ```sh
 git kanka fetch
 git kanka status
 git kanka diff
 git kanka pull
+
+git kanka validate
+git add world
+git commit -m "Describe the new location"
+git kanka plan
+git kanka push
 ```
 
-To delete managed Kanka content, create and commit a tombstone with `git kanka delete <local-id>`, inspect `git kanka plan`, and use `git kanka push --allow-delete`. Removing a local file never deletes Kanka content. Coordinate an editing pause while publishing: Kanka does not document a conditional-write API, so a final read/write race remains possible.
+To delete managed content, create and commit a tombstone with `git kanka delete <local-id>`, inspect `git kanka plan`, then use `git kanka push --allow-delete`. Removing a local file never deletes Kanka content.
 
-## Support and security
+## Global-tool installation
 
-Kanka Git Sync is MIT licensed and maintained on a best-effort basis. It supports .NET 10 and Git on Windows and Linux. Report suspected vulnerabilities privately through GitHub Security Advisories; do not include tokens or campaign content in public issues. The current supported surface is documented in the architecture record; do not treat untested Kanka resource types as editable.
+The global-tool route remains supported for users who need it and requires .NET 10 SDK plus Git on `PATH`:
 
-The Wiki is the complete manual. Repository-controlled technical records remain available: [architecture and limitations](docs/architecture.md), [security review](docs/security-review.md), [verification](docs/verification.md), [project ruleset](docs/project-ruleset-v0.1.md), and [live acceptance checks](docs/acceptance.md).
+```sh
+dotnet tool install --global KankaGitSync
+git kanka help
+git kanka update
+```
 
-## Windows installer
+For development from a checkout, restore with `dotnet restore --locked-mode`, build and test in Release, pack to `artifacts/packages`, then install using `--add-source ./artifacts/packages`.
 
-Windows installer builds are currently unsigned tester artifacts, not a public production release. Windows SmartScreen can warn or block them. Download them only from this repository's Actions artifacts and verify the published SHA-256 checksum before running them. The installer includes Kanka Git Sync and opens a guided world setup wizard; it does not require .NET or Git Bash. Git for Windows is required because Git is the synchronization history store. If it is missing, install it from the official Git for Windows site, then return to the wizard. The wizard can select an existing repository or create a world under `Documents\Kanka Worlds`, and stores the Kanka token only in that world's ignored `.env` file.
+The full manual is in the [GitHub Wiki](https://github.com/Kirtanei/KankaGitSync/wiki): [installation](https://github.com/Kirtanei/KankaGitSync/wiki/Installation), [daily workflow](https://github.com/Kirtanei/KankaGitSync/wiki/Daily-Workflow), [command reference](https://github.com/Kirtanei/KankaGitSync/wiki/Command-Reference), [architecture](https://github.com/Kirtanei/KankaGitSync/wiki/Architecture-Overview), and [safety/recovery](https://github.com/Kirtanei/KankaGitSync/wiki/Troubleshooting-and-Recovery).
+
+Repository-controlled records: [architecture and limitations](docs/architecture.md), [security review](docs/security-review.md), [verification](docs/verification.md), [release certification](docs/release-certification.md), [project ruleset](docs/project-ruleset-v0.1.md), and [live acceptance checks](docs/acceptance.md).

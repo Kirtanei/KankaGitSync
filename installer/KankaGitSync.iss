@@ -15,7 +15,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed={#AppArchitecture}
 ArchitecturesInstallIn64BitMode={#AppArchitecture}
 OutputDir=..\artifacts\installers
-OutputBaseFilename=KankaGitSync-Setup-{#AppArchitecture}
+OutputBaseFilename=KankaGitSync-{#AppVersion}-win-{#AppArchitecture}-Setup
 Compression=lzma2
 SolidCompression=yes
 ChangesEnvironment=yes
@@ -24,6 +24,7 @@ UninstallDisplayIcon={app}\git-kanka.exe
 [Files]
 Source: "{#PublishDirectory}\git-kanka.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PublishDirectory}\KankaGitSync.Setup.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "kanka-installer.marker"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}\Kanka Git Sync setup"; Filename: "{app}\KankaGitSync.Setup.exe"
