@@ -14,9 +14,19 @@ New-Item -ItemType Directory -Force -Path $run | Out-Null
 function Invoke-Tool([string] $Name, [string] $Path, [string[]] $Arguments, [bool] $ExpectedFailure = $false) {
     Push-Location $Path
     try {
-        $text = (& $ToolPath @Arguments 2>&1 | Out-String)
+        $savedPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $text = (& $ToolPath @Arguments 2>&1 | Out-String)
+            $exitCode = $LASTEXITCODE
+        }
+        catch {
+            $text = $_ | Out-String
+            $exitCode = 1
+        }
+        finally { $ErrorActionPreference = $savedPreference }
         Set-Content -LiteralPath (Join-Path $run "$Name.txt") -Value $text -NoNewline
-        if (($LASTEXITCODE -ne 0) -ne $ExpectedFailure) { throw "$Name returned an unexpected exit code." }
+        if (($exitCode -ne 0) -ne $ExpectedFailure) { throw "$Name returned an unexpected exit code." }
         return $text
     } finally { Pop-Location }
 }
