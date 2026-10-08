@@ -31,7 +31,7 @@ Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $le
 Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $right '.env')
 
 foreach ($clone in @($left, $right)) {
-    Invoke-Tool "bootstrap-fetch-$(Split-Path $clone -Leaf)" $clone @('fetch') | Out-Null
+    Invoke-Tool "bootstrap-fetch-$(Split-Path $clone -Leaf)" $clone @('fetch', '--full') | Out-Null
     git -C $clone merge --ff-only kanka/live
     if ($LASTEXITCODE -ne 0) { throw "Could not integrate the initial Kanka state in $clone." }
 }
