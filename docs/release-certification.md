@@ -14,6 +14,8 @@ Run `docs/acceptance.md` against a disposable campaign with an administrator tok
 
 `scripts/Invoke-ReleaseCertification.ps1` is the repeatable owner-side runner. It writes only ignored, sanitized evidence under `artifacts/release-certification/`; use `-RunLive` only with the disposable world and a clean working tree. It creates uniquely prefixed fixtures and removes them through committed tombstones unless `-KeepFixtures` is supplied. The runner does not replace the separate-player or clean-VM gates.
 
+Use `scripts/Invoke-TwoCloneCertification.ps1` for the owner/concurrent-writer block check. It bootstraps each clone with `fetch --full`, so it requires only the Kanka token and never a GitHub webhook token. Use `scripts/Invoke-LostResponseCertification.ps1` only for a prepared, committed update with the exact Kanka API path; it runs mitmproxy in ignored artifacts, records response metadata only, and removes its temporary current-user trust certificate in `finally`.
+
 Require zero-write initial import/repeated fetch; owner and player UI edits that block push; managed create/update/delete round trips for entities, tags, properties, posts, relations, privacy, and circular references; preservation of unmanaged fields and permissions; semantic merge and conflict cases; and explicit deletion acknowledgement.
 
 Use an HTTPS proxy to forward one write then discard its response. Verify durable intent, refetch-based recovery, no blind replay, and the documented manual reconciliation flow for both update and lost-create responses.
