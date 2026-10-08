@@ -37,6 +37,21 @@ function Require-ZeroPlan {
     if ($plan -notmatch '(?m)^0 API operations planned\.\r?$') { throw 'Recovery did not reconcile to a zero-operation plan.' }
 }
 
+function Invoke-LostResponsePush {
+    $standardOutput = Join-Path $evidence 'push-lost-response.stdout.txt'
+    $standardError = Join-Path $evidence 'push-lost-response.stderr.txt'
+    $process = Start-Process -FilePath $ToolPath -ArgumentList @('push', '--approve-privacy') -WorkingDirectory $WorldPath -PassThru -NoNewWindow -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError
+    for ($attempt = 0; $attempt -lt 600 -and -not (Test-Path -LiteralPath $proxy.Evidence) -and -not $process.HasExited; $attempt++) { Start-Sleep -Milliseconds 500 }
+    if (-not (Test-Path -LiteralPath $proxy.Evidence)) {
+        if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+        throw 'The proxy did not confirm an origin response before the push client exited or timed out.'
+    }
+    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    $process.WaitForExit()
+    $text = ((Get-Content -LiteralPath $standardOutput,$standardError -ErrorAction SilentlyContinue) | Out-String)
+    Write-SafeEvidence 'push-lost-response.txt' $text
+}
+
 try {
     if (Get-Process git-kanka -ErrorAction SilentlyContinue) { throw 'A git-kanka process is already active; refusing to contend for the operation ledger.' }
     if ((git -C $WorldPath status --porcelain).Count -ne 0) { throw 'World repository has uncommitted changes.' }
@@ -45,7 +60,7 @@ try {
     $proxy = & (Join-Path $PSScriptRoot 'Start-KankaFaultProxy.ps1') -Method $Method -Path $ApiPath -EvidenceDirectory $evidence
     $env:HTTP_PROXY = $proxy.Proxy
     $env:HTTPS_PROXY = $proxy.Proxy
-    Invoke-Recorded 'push-lost-response' { & $ToolPath push --approve-privacy } $true | Out-Null
+    Invoke-LostResponsePush
     Remove-Item Env:\HTTP_PROXY,Env:\HTTPS_PROXY -ErrorAction SilentlyContinue
     if (-not (Test-Path -LiteralPath $proxy.Evidence)) { throw 'The proxy did not confirm an origin response before suppression.' }
     Invoke-Recorded 'doctor-blocked' { & $ToolPath doctor } $true | Out-Null
