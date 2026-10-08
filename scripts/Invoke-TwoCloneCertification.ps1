@@ -30,6 +30,12 @@ git -C $right config user.email 'release-certification@localhost'
 Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $left '.env')
 Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $right '.env')
 
+foreach ($clone in @($left, $right)) {
+    Invoke-Tool "bootstrap-fetch-$(Split-Path $clone -Leaf)" $clone @('fetch') | Out-Null
+    git -C $clone merge --ff-only kanka/live
+    if ($LASTEXITCODE -ne 0) { throw "Could not integrate the initial Kanka state in $clone." }
+}
+
 # Caller prepares a unique fixture. Owner publishes a structured field; concurrent writer must be blocked before mutation.
 (Get-Content -Raw -LiteralPath (Join-Path $left $FixturePath)).Replace('title: ""', 'title: Owner certification') | Set-Content -LiteralPath (Join-Path $left $FixturePath) -NoNewline
 git -C $left add world; git -C $left commit -m 'Owner certification update'
