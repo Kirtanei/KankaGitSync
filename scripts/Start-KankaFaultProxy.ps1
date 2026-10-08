@@ -19,9 +19,9 @@ $venvPython = Join-Path $venv 'Scripts\python.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Could not install mitmproxy into the ignored certification directory.' }
 
 New-Item -ItemType Directory -Force -Path $conf | Out-Null
-$environment:KANKA_FAULT_METHOD = $Method
-$environment:KANKA_FAULT_PATH = $Path
-$environment:KANKA_FAULT_EVIDENCE = $eventPath
+$env:KANKA_FAULT_METHOD = $Method
+$env:KANKA_FAULT_PATH = $Path
+$env:KANKA_FAULT_EVIDENCE = $eventPath
 $mitmdump = Join-Path $venv 'Scripts\mitmdump.exe'
 $process = Start-Process -FilePath $mitmdump -ArgumentList @('--quiet', '--listen-host', '127.0.0.1', '--listen-port', '18765', '--set', "confdir=$conf", '-s', (Join-Path $scriptRoot 'kanka_fault_proxy.py')) -PassThru -WindowStyle Hidden
 

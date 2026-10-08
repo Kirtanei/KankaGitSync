@@ -30,6 +30,21 @@ function Invoke-Tool([string] $Name, [string] $Path, [string[]] $Arguments, [boo
         return $text
     } finally { Pop-Location }
 }
+
+function Resolve-FixturePath([string] $ClonePath, [string] $RequestedPath) {
+    $requested = Join-Path $ClonePath $RequestedPath
+    if (Test-Path -LiteralPath $requested) { return $RequestedPath }
+
+    $leaf = Split-Path (Split-Path $RequestedPath -Parent) -Leaf
+    $tokens = @($leaf -split '-' | Where-Object { $_.Length -ge 4 -and $_ -ne 'cert' })
+    $matches = @(Get-ChildItem -LiteralPath (Join-Path $ClonePath 'world') -Filter index.md -Recurse |
+        Where-Object {
+            $candidate = $_.Directory.Name
+            @($tokens | Where-Object { $candidate -notlike "*$_*" }).Count -eq 0
+        })
+    if ($matches.Count -ne 1) { throw "Fixture path '$RequestedPath' was normalized and could not be resolved uniquely." }
+    return $matches[0].FullName.Substring($ClonePath.Length + 1)
+}
 $remote = (git -C $WorldPath remote get-url origin).Trim()
 git clone $remote $left
 git clone $remote $right
@@ -47,6 +62,7 @@ foreach ($clone in @($left, $right)) {
 }
 
 # Caller prepares a unique fixture. Owner publishes a structured field; concurrent writer must be blocked before mutation.
+$FixturePath = Resolve-FixturePath $left $FixturePath
 (Get-Content -Raw -LiteralPath (Join-Path $left $FixturePath)).Replace('title: ""', 'title: Owner certification') | Set-Content -LiteralPath (Join-Path $left $FixturePath) -NoNewline
 git -C $left add world; git -C $left commit -m 'Owner certification update'
 Invoke-Tool 'owner-push' $left @('push', '--approve-privacy') | Out-Null
