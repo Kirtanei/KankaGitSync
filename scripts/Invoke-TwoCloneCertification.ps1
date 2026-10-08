@@ -23,6 +23,10 @@ function Invoke-Tool([string] $Name, [string] $Path, [string[]] $Arguments, [boo
 $remote = (git -C $WorldPath remote get-url origin).Trim()
 git clone $remote $left
 git clone $remote $right
+git -C $left config user.name 'Release certification'
+git -C $left config user.email 'release-certification@localhost'
+git -C $right config user.name 'Release certification'
+git -C $right config user.email 'release-certification@localhost'
 Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $left '.env')
 Copy-Item -LiteralPath (Join-Path $WorldPath '.env') -Destination (Join-Path $right '.env')
 
