@@ -31,10 +31,15 @@ if (-not (Test-Path -LiteralPath $certificate)) {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     throw 'mitmproxy did not create its temporary certificate.'
 }
-$imported = Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\Root
+$certificateInfo = Get-PfxCertificate -FilePath $certificate
+& certutil.exe -user -f -addstore Root $certificate | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    throw 'Could not import the temporary proxy certificate into the current-user trust store.'
+}
 [pscustomobject]@{
     ProcessId = $process.Id
     Proxy = 'http://127.0.0.1:18765'
-    CertificateThumbprint = $imported.Thumbprint
+    CertificateThumbprint = $certificateInfo.Thumbprint
     Evidence = $eventPath
 }
