@@ -178,6 +178,14 @@ public sealed class GitRepository(string root) : ISynchronizationRepository
             throw new SyncException("Commit or stash working-tree changes first.");
     }
 
+    public async Task RenameInitialMasterBranchAsync()
+    {
+        var head = await RequireAsync(["symbolic-ref", "HEAD"]).ConfigureAwait(false);
+        if (head != "refs/heads/master") return;
+        if (await ResolveAsync(Main).ConfigureAwait(false) != null) return;
+        await RequireAsync(["branch", "-M", "main"]).ConfigureAwait(false);
+    }
+
     public string SafePath(string relative)
     {
         if (relative.Contains('\\') || Path.IsPathRooted(relative) || relative.Split('/').Any(part => part is ".." or "." or ""))

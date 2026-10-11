@@ -27,6 +27,7 @@ public static class CampaignSetup
     public static async Task InitializeAsync(GitRepository repository, long campaignId, CancellationToken cancellationToken = default)
     {
         if (campaignId <= 0) throw new SyncException("Campaign ID must be a positive integer.");
+        await repository.RenameInitialMasterBranchAsync().ConfigureAwait(false);
         var configurationPath = repository.SafePath(".kanka/config.yml");
         await EnsureConfigurationAsync(configurationPath, campaignId, cancellationToken).ConfigureAwait(false);
         var usersPath = repository.SafePath(".kanka/users.yml");

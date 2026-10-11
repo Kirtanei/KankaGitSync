@@ -52,6 +52,23 @@ public sealed class CommandAndGitTests
     }
 
     [Fact]
+    public async Task InitRenamesGitDefaultMasterBranchBeforeFirstCommit()
+    {
+        using var fixture = new TestRepository();
+        await fixture.Git.RequireAsync(["-c", "init.defaultBranch=master", "init"]);
+        await fixture.Git.RequireAsync(["config", "user.name", "Test GM"]);
+        await fixture.Git.RequireAsync(["config", "user.email", "test@localhost"]);
+        await fixture.Git.RequireAsync(["config", "commit.gpgsign", "false"]);
+        using var output = new StringWriter();
+        using var errors = new StringWriter();
+
+        Assert.Equal(0, await CommandLine.RunAsync(["init", "--campaign", "123"], fixture.Git.Root, output, errors));
+        Assert.Equal(GitRepository.Main, await fixture.Git.RequireAsync(["symbolic-ref", "HEAD"]));
+        await fixture.CommitAsync();
+        await fixture.Git.EnsureCleanMainAsync();
+    }
+
+    [Fact]
     public async Task OfflineCommandsExposeChangesAndStageReview()
     {
         using var fixture = new TestRepository();
