@@ -41,7 +41,7 @@
   - unmanaged fields and permissions remaining unchanged;
   - non-overlapping merge, competing-edit conflict, privacy conflict, and explicit deletion acknowledgement;
   - interrupted update and lost-create-response recovery using a disposable-campaign HTTPS proxy that forwards the write then drops the response; verify durable intent, refetch, no blind replay, and manual reconciliation flow.
-- Run clean-VM smoke tests for both installer architectures:
+- Run clean-VM smoke tests for both installer architectures when the required architecture-native VM or hardware is available:
   - download from the RC release rather than the build workspace;
   - verify SHA-256 and GitHub attestation before execution;
   - exercise SmartScreen-warning documentation, install, PATH refresh, `git kanka help`, wizard setup with a disposable token, import/fetch, manual upgrade, uninstall, and preservation of world repositories and `.env` files.
@@ -56,6 +56,6 @@
 
 ## Assumptions
 
-- A disposable Kanka campaign, an administrator token, a separate player account, Windows x64 and Arm64 test machines/VMs, and GitHub Release permissions are available to the maintainer.
+- A disposable Kanka campaign, an administrator token, a separate player account, Windows x64 and Arm64 test machines/VMs, and GitHub Release permissions are available to the maintainer. If an Arm64 test machine/VM is unavailable, its clean-install smoke row is a documented release limitation rather than a passed certification row; artifact checksum and provenance verification remain required.
 - GitHub Actions artifact attestations are available because the repository is public; no paid signing or hosting service is required.
 - The 1.0 promise is a narrowly certified synchronization core, not complete Kanka API parity.

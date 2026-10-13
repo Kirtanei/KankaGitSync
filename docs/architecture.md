@@ -41,7 +41,7 @@ Unknown property types, unknown visibility values, inaccessible relation targets
 - Preserved raw HTML is not rendered locally or sanitized by this CLI. Preview only in a renderer with appropriate HTML security controls. Imported unknown mention syntax may retain Kanka-specific references to prevent data loss.
 - Nested metadata outside the supported schema is rejected for authored files. Detailed type-specific references and attachment options are preserved read-only until covered by a tested adapter.
 - New entities stay private if a push fails before completion. Manual reconciliation is required for an API create whose response was lost; automated name matching would risk confusing unrelated resources.
-- No release is certified until the disposable-campaign, lost-response, and clean-VM gates in `docs/release-certification.md` have passed. Offline fixtures alone are not production-readiness certification.
+- No release is certified until the disposable-campaign, lost-response, and clean-VM gates in `docs/release-certification.md` have passed, or an unavailable architecture-native clean-VM gate has been explicitly accepted and documented as a release limitation. Offline fixtures alone are not production-readiness certification.
 
 ## API references consulted
 

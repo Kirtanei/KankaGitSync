@@ -24,6 +24,8 @@ Use an HTTPS proxy to forward one write then discard its response. Verify durabl
 
 On clean Windows 10 22H2-or-later x64 and Arm64 VMs, verify the downloaded RC checksum and attestation; document the SmartScreen/policy warning; install; refresh PATH; run `git kanka help`; use the wizard with a disposable token; import and fetch; exercise manual upgrade; uninstall; and confirm world repositories and `.env` files remain.
 
+If a clean VM for a published architecture is unavailable, do not record that matrix as passed. Record an explicit release limitation instead: artifact checksum and provenance verification may still pass, but runtime/install smoke evidence is unavailable. This exception requires maintainer acceptance in `docs/verification.md` and must remain in the release notes until an architecture-native clean-VM run is completed.
+
 ## Final release
 
 Repeat the tag workflow and both smoke-test matrices for `v1.0.0`. Publish the completed matrix and known limitations in the release notes. Any preservation, zero-change, recovery, verification, or VM failure blocks the release.
