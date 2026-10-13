@@ -86,6 +86,11 @@ jobs:
           ```
 
           Compare the SHA-256 result with `KankaGitSync-<version>-checksums.txt`. GitHub attestations verify build provenance; they do not make an unsigned installer trusted by Windows.
+
+          ## Known certification limitations
+
+          - The `win-arm64` installer checksum and provenance were verified, but an architecture-native clean-install/runtime smoke test was unavailable.
+          - Separate-player Kanka UI visibility and permission presentation were not rechecked for this release; automated owner-side, two-clone, and prior player-edit evidence passed.
           '@
           $notes | Set-Content artifacts/release/verification-instructions.md
           $releaseArguments = @("release", "create", $env:GITHUB_REF_NAME, "artifacts/release/*", "--repo", $env:GITHUB_REPOSITORY, "--verify-tag", "--title", "Kanka Git Sync $env:GITHUB_REF_NAME", "--notes-file", "artifacts/release/verification-instructions.md")
